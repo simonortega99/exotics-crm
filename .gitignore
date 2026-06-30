@@ -4,3 +4,11 @@ dist
 .env.local
 .DS_Store
 Icon?
+
+# Vite temp
+vite.config.js.timestamp-*
+*.timestamp-*.mjs
+
+vite.config.js.timestamp-*
+
+vite.config.js.timestamp-*
