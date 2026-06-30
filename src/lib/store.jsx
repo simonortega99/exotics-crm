@@ -105,57 +105,75 @@ export function StoreProvider({ children }) {
   const [data, setData] = useState(initialState)
   const [loaded, setLoaded] = useState(false)
   const skipSave = useRef(false)
+  const signedIn = useRef(!supabase) // sin supabase, siempre "activo" (modo local)
+  const channelRef = useRef(null)
 
-  // Carga inicial: desde Supabase si está configurado; si no, localStorage.
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      let local = {}
-      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) local = JSON.parse(raw) } catch { /* noop */ }
-
-      if (supabase) {
-        try {
-          const { data: row, error } = await supabase.from('crm_state').select('data').eq('id', ROW_ID).maybeSingle()
-          if (error) throw error
-          if (cancelled) return
-          if (row && row.data) {
-            skipSave.current = true
-            setData(migrate(row.data))
-          } else {
-            // Primera vez: sembrar con lo que haya en localStorage (o defaults)
-            const seeded = migrate(local)
-            setData(seeded)
-            await supabase.from('crm_state').upsert({ id: ROW_ID, data: { ...seeded, _writer: CLIENT_ID }, updated_at: new Date().toISOString() })
-          }
-        } catch (e) {
-          console.error('Supabase no disponible, usando localStorage:', e)
-          if (!cancelled) setData(migrate(local))
-        }
-      } else {
-        setData(migrate(local))
-      }
-      if (!cancelled) setLoaded(true)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [])
-
-  // Sincronización en tiempo real (los cambios de otros usuarios entran solos)
-  useEffect(() => {
-    if (!supabase || !loaded) return
-    const ch = supabase.channel('crm_state_changes')
+  function setupRealtime() {
+    if (!supabase) return
+    if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
+    channelRef.current = supabase.channel('crm_state_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_state', filter: `id=eq.${ROW_ID}` }, payload => {
         const d = payload.new && payload.new.data
         if (d && d._writer !== CLIENT_ID) { skipSave.current = true; setData(migrate(d)) }
       })
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [loaded])
+  }
+
+  async function loadRemote() {
+    try {
+      const { data: row, error } = await supabase.from('crm_state').select('data').eq('id', ROW_ID).maybeSingle()
+      if (error) throw error
+      if (row && row.data) {
+        skipSave.current = true
+        setData(migrate(row.data))
+      } else {
+        let local = {}
+        try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) local = JSON.parse(raw) } catch { /* noop */ }
+        const seeded = migrate(local)
+        setData(seeded)
+        await supabase.from('crm_state').upsert({ id: ROW_ID, data: { ...seeded, _writer: CLIENT_ID }, updated_at: new Date().toISOString() })
+      }
+      setupRealtime()
+    } catch (e) {
+      console.error('Error cargando de Supabase:', e)
+    }
+  }
+
+  // Carga inicial
+  useEffect(() => {
+    let cancelled = false
+
+    if (!supabase) {
+      // Modo local (sin Supabase configurado)
+      let local = {}
+      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) local = JSON.parse(raw) } catch { /* noop */ }
+      setData(migrate(local)); setLoaded(true)
+      return
+    }
+
+    // Modo Supabase: los datos solo se cargan con sesión iniciada (RLS)
+    supabase.auth.getSession().then(async ({ data: s }) => {
+      if (cancelled) return
+      if (s.session) { signedIn.current = true; await loadRemote() }
+      else { setData(migrate({})) }
+      setLoaded(true)
+    })
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
+      if (event === 'SIGNED_IN' && s) { signedIn.current = true; skipSave.current = true; await loadRemote() }
+      if (event === 'SIGNED_OUT') {
+        signedIn.current = false
+        if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
+        skipSave.current = true; setData(migrate({}))
+      }
+    })
+    return () => { cancelled = true; sub.subscription.unsubscribe(); if (channelRef.current) supabase.removeChannel(channelRef.current) }
+  }, [])
 
   // Guardado (debounced): Supabase + copia local de respaldo
   useEffect(() => {
     if (!loaded) return
     if (skipSave.current) { skipSave.current = false; return }
+    if (supabase && !signedIn.current) return // sin sesión no guardamos (evita pisar el respaldo local)
     const t = setTimeout(async () => {
       if (supabase) {
         try {

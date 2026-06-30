@@ -1,16 +1,22 @@
 import { useState } from 'react'
 import { useAuth } from '../lib/auth.jsx'
 import { BrandMark } from '../components/ui.jsx'
+import { supabase } from '../lib/supabaseClient.js'
 
 export default function Login() {
   const { login } = useAuth()
   const [usuario, setUsuario] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(false)
+  const [cargando, setCargando] = useState(false)
+  const usaEmail = !!supabase
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault()
-    if (!login(usuario, password)) { setError(true); setPassword('') }
+    setCargando(true)
+    const ok = await login(usuario, password)
+    setCargando(false)
+    if (!ok) { setError(true); setPassword('') }
   }
 
   return (
@@ -24,15 +30,15 @@ export default function Login() {
           </div>
         </div>
         <div className="field">
-          <div className="field-label">Usuario</div>
-          <input className="input" value={usuario} onChange={e => { setUsuario(e.target.value); setError(false) }} autoFocus autoComplete="username" />
+          <div className="field-label">{usaEmail ? 'Email' : 'Usuario'}</div>
+          <input className="input" type={usaEmail ? 'email' : 'text'} value={usuario} onChange={e => { setUsuario(e.target.value); setError(false) }} autoFocus autoComplete="username" />
         </div>
         <div className="field">
           <div className="field-label">Contraseña</div>
           <input className="input" type="password" value={password} onChange={e => { setPassword(e.target.value); setError(false) }} autoComplete="current-password" />
         </div>
-        {error && <div className="t-red" style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>Usuario o contraseña incorrectos.</div>}
-        <button className="btn cyan" type="submit" style={{ width: '100%', justifyContent: 'center', padding: 10 }}>Entrar</button>
+        {error && <div className="t-red" style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{usaEmail ? 'Email o contraseña incorrectos.' : 'Usuario o contraseña incorrectos.'}</div>}
+        <button className="btn cyan" type="submit" disabled={cargando} style={{ width: '100%', justifyContent: 'center', padding: 10 }}>{cargando ? 'Entrando…' : 'Entrar'}</button>
         <div className="text-3" style={{ fontSize: 11, marginTop: 14, textAlign: 'center' }}>Gestiona los accesos desde "Equipo" en el menú lateral.</div>
       </form>
     </div>

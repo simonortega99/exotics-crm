@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
+import { supabase } from '../lib/supabaseClient.js'
 import { uid } from '../lib/utils.js'
 import { Modal, BrandMark } from './ui.jsx'
 import { toast, confirmDelete } from './feedback.jsx'
@@ -90,13 +91,13 @@ export default function Sidebar() {
 
       <div className="sidebar-foot">
         <div className="sidebar-user">
-          <div className="avatar">{(user?.nombre || '?').charAt(0)}</div>
+          <div className="avatar">{(user?.nombre || '?').charAt(0).toUpperCase()}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="nav-label" style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{user?.nombre}</div>
-            <div className="nav-label" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>@{user?.usuario}</div>
+            <div className="nav-label" style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.nombre}</div>
+            <div className="nav-label" style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.usuario}</div>
           </div>
           <button className="btn icon" title="Cerrar sesión" onClick={logout}
-            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)' }}><LogOut size={15} /></button>
+            style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', flexShrink: 0, padding: 6 }}><LogOut size={15} /></button>
         </div>
         {isAdmin && (
           <button className="foot-btn" onClick={() => setShowTeam(true)}>
@@ -113,16 +114,25 @@ export default function Sidebar() {
 
 function TeamModal({ onClose }) {
   const { data, setField } = useStore()
+  const sb = !!supabase
   const equipo = data.equipo || []
-  const [nuevo, setNuevo] = useState({ nombre: '', usuario: '', password: '', rol: 'asesor' })
+  const [nuevo, setNuevo] = useState({ nombre: '', email: '', usuario: '', password: '', rol: 'asesor' })
 
   const save = arr => { setField('equipo', arr); setField('asesores', arr.map(e => e.nombre)) }
   function add() {
-    const n = nuevo.nombre.trim(), u = nuevo.usuario.trim().toLowerCase()
-    if (!n || !u || !nuevo.password) { toast('Completa nombre, usuario y contraseña', 'error'); return }
-    if (equipo.some(e => e.usuario.toLowerCase() === u)) { toast('Ese usuario ya existe', 'error'); return }
-    save([...equipo, { id: uid(), nombre: n, usuario: u, password: nuevo.password, rol: nuevo.rol }])
-    setNuevo({ nombre: '', usuario: '', password: '', rol: 'asesor' }); toast(`${n} agregado al equipo`)
+    const n = nuevo.nombre.trim()
+    if (sb) {
+      const em = nuevo.email.trim().toLowerCase()
+      if (!n || !em) { toast('Completa nombre y email', 'error'); return }
+      if (equipo.some(e => (e.email || '').toLowerCase() === em)) { toast('Ese email ya existe', 'error'); return }
+      save([...equipo, { id: uid(), nombre: n, email: em, rol: nuevo.rol }])
+    } else {
+      const u = nuevo.usuario.trim().toLowerCase()
+      if (!n || !u || !nuevo.password) { toast('Completa nombre, usuario y contraseña', 'error'); return }
+      if (equipo.some(e => (e.usuario || '').toLowerCase() === u)) { toast('Ese usuario ya existe', 'error'); return }
+      save([...equipo, { id: uid(), nombre: n, usuario: u, password: nuevo.password, rol: nuevo.rol }])
+    }
+    setNuevo({ nombre: '', email: '', usuario: '', password: '', rol: 'asesor' }); toast(`${n} agregado al equipo`)
   }
   function update(id, k, v) { save(equipo.map(e => e.id === id ? { ...e, [k]: v } : e)) }
   function remove(e) {
@@ -134,7 +144,9 @@ function TeamModal({ onClose }) {
     <Modal title="Equipo y accesos" onClose={onClose} width={480}
       footer={<button className="btn" onClick={onClose}>Cerrar</button>}>
       <div className="text-3 mb-12" style={{ fontSize: 12 }}>
-        Cada persona entra con su usuario y contraseña. Los <b>admins</b> ven todo y gestionan el equipo; los <b>asesores</b> solo ven su propia información.
+        {sb
+          ? <>Cada persona entra con su <b>email</b> y contraseña (la contraseña se gestiona en Supabase). Aquí defines el nombre y el rol por email. <b>Admins</b> ven todo; <b>asesores</b> solo lo suyo.</>
+          : <>Cada persona entra con su usuario y contraseña. <b>Admins</b> ven todo; <b>asesores</b> solo lo suyo.</>}
       </div>
       {equipo.map(e => (
         <div key={e.id} className="card" style={{ background: 'var(--surface-2)', boxShadow: 'none', padding: 12, marginBottom: 10 }}>
@@ -144,8 +156,12 @@ function TeamModal({ onClose }) {
           </div>
           <div className="form-grid cols-2">
             <div><div className="field-label">Nombre</div><input className="input" value={e.nombre} onChange={ev => update(e.id, 'nombre', ev.target.value)} /></div>
-            <div><div className="field-label">Usuario</div><input className="input" value={e.usuario} onChange={ev => update(e.id, 'usuario', ev.target.value)} /></div>
-            <div><div className="field-label">Contraseña</div><input className="input" value={e.password} onChange={ev => update(e.id, 'password', ev.target.value)} /></div>
+            {sb
+              ? <div><div className="field-label">Email</div><input className="input" type="email" value={e.email || ''} onChange={ev => update(e.id, 'email', ev.target.value)} placeholder="correo@empresa.com" /></div>
+              : <>
+                  <div><div className="field-label">Usuario</div><input className="input" value={e.usuario || ''} onChange={ev => update(e.id, 'usuario', ev.target.value)} /></div>
+                  <div><div className="field-label">Contraseña</div><input className="input" value={e.password || ''} onChange={ev => update(e.id, 'password', ev.target.value)} /></div>
+                </>}
             <div><div className="field-label">Rol</div>
               <select className="select" value={e.rol} onChange={ev => update(e.id, 'rol', ev.target.value)}>
                 <option value="admin">Admin</option><option value="asesor">Asesor</option>
@@ -157,13 +173,18 @@ function TeamModal({ onClose }) {
       <div className="overline" style={{ margin: '14px 0 8px' }}>Nuevo usuario</div>
       <div className="form-grid cols-2">
         <input className="input" placeholder="Nombre" value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
-        <input className="input" placeholder="Usuario" value={nuevo.usuario} onChange={e => setNuevo({ ...nuevo, usuario: e.target.value })} />
-        <input className="input" placeholder="Contraseña" value={nuevo.password} onChange={e => setNuevo({ ...nuevo, password: e.target.value })} />
+        {sb
+          ? <input className="input" type="email" placeholder="Email" value={nuevo.email} onChange={e => setNuevo({ ...nuevo, email: e.target.value })} />
+          : <>
+              <input className="input" placeholder="Usuario" value={nuevo.usuario} onChange={e => setNuevo({ ...nuevo, usuario: e.target.value })} />
+              <input className="input" placeholder="Contraseña" value={nuevo.password} onChange={e => setNuevo({ ...nuevo, password: e.target.value })} />
+            </>}
         <select className="select" value={nuevo.rol} onChange={e => setNuevo({ ...nuevo, rol: e.target.value })}>
           <option value="asesor">Asesor</option><option value="admin">Admin</option>
         </select>
       </div>
       <button className="btn cyan mt-12" onClick={add}><Plus size={14} /> Agregar usuario</button>
+      {sb && <div className="text-3 mt-12" style={{ fontSize: 11 }}>Recuerda crear también la cuenta (email + contraseña) en Supabase → Authentication → Users.</div>}
     </Modal>
   )
 }
