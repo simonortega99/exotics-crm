@@ -33,8 +33,8 @@ export default function Inventario() {
     return [...map.values()]
   }
   function exportar() {
-    const headers = ['Marca', 'Modelo', 'Año', 'Tipo', 'Estado', 'Precio', 'Comisión %', 'Días en stock', 'Contacto', 'Referido por', '% Com. referido', 'Asesor', 'Fecha ingreso']
-    const rows = list.map(v => [v.marca, v.modelo, v.anio, v.tipo, v.estado, v.precio, v.comision, v.fechaIngreso ? daysSince(v.fechaIngreso) : '', v.contactoNombre, v.referidoPor, v.comisionReferido, v.owner, v.fechaIngreso])
+    const headers = ['Marca', 'Modelo', 'Año', 'Placa', 'Tipo', 'Estado', 'Precio', 'Comisión %', 'Días en stock', 'Contacto', 'Referido por', '% Com. referido', 'Asesor', 'Fecha ingreso']
+    const rows = list.map(v => [v.marca, v.modelo, v.anio, v.placa, v.tipo, v.estado, v.precio, v.comision, v.fechaIngreso ? daysSince(v.fechaIngreso) : '', v.contactoNombre, v.referidoPor, v.comisionReferido, v.owner, v.fechaIngreso])
     exportarHojaXls(`Inventario_${today()}.xls`, 'Inventario · Exotics Co.', headers, rows)
     toast('Inventario exportado')
   }
@@ -83,6 +83,7 @@ export default function Inventario() {
                     <tr className="clickable" onClick={() => setOpenId(open ? null : v.id)}>
                       <td>
                         <div className="cell-strong">{v.marca} {v.modelo} <span className="text-3">{expandible ? (open ? '▾' : '▸') : ''}</span></div>
+                        {v.placa && <div className="text-3" style={{ fontSize: 11 }}>Placa: {v.placa}</div>}
                         {v.contactoNombre && <div className="text-3" style={{ fontSize: 11 }}>{v.tipo === 'Aliado' ? 'Aliado' : 'Consignante'}: {v.contactoNombre}</div>}
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
                       </td>
@@ -177,11 +178,13 @@ function DatoVenta({ label, valor }) {
 
 function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || {
-    marca: '', modelo: '', anio: '', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
+    marca: '', modelo: '', anio: '', placa: '', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
     fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '',
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
   const needsLink = linkTipos.includes(form.tipo)
+  const linkRol = form.tipo === 'Aliado' ? 'aliado' : 'consignante'
+  const leadsLink = leads.filter(l => l.rol === linkRol)
 
   function pickContacto(id) {
     const l = leads.find(x => x.id === id)
@@ -195,6 +198,7 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
         <Field label="Marca"><input className="input" value={form.marca} onChange={e => set('marca', e.target.value)} autoFocus /></Field>
         <Field label="Modelo"><input className="input" value={form.modelo} onChange={e => set('modelo', e.target.value)} /></Field>
         <Field label="Año"><input className="input" value={form.anio} onChange={e => set('anio', e.target.value)} /></Field>
+        <Field label="Placa"><input className="input" value={form.placa || ''} onChange={e => set('placa', e.target.value.toUpperCase())} placeholder="ABC123" /></Field>
         <Field label="Precio"><NumberInput prefix="$" value={form.precio} onChange={v => set('precio', v)} /></Field>
         <Field label="% Comisión"><input className="input" value={form.comision} onChange={e => set('comision', e.target.value)} placeholder="ej. 5" /></Field>
         <Field label="Tipo">
@@ -202,11 +206,12 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
         </Field>
       </div>
       {needsLink && (
-        <Field label={`Contacto (${form.tipo === 'Aliado' ? 'aliado' : 'consignante'})`}>
+        <Field label={`Contacto (${linkRol})`}>
           <select className="select" value={form.contactoId} onChange={e => pickContacto(e.target.value)}>
             <option value="">— Sin vincular —</option>
-            {leads.map(l => <option key={l.id} value={l.id}>{l.nombre} ({l.rol || 'lead'})</option>)}
+            {leadsLink.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
+          {!leadsLink.length && <div className="text-3" style={{ fontSize: 11, marginTop: 4 }}>No hay contactos con rol "{linkRol}". Créalos en Contactos.</div>}
         </Field>
       )}
       <div className="form-grid cols-2">

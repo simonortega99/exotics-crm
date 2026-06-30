@@ -19,8 +19,8 @@ export const CUENTAS_REDES = ['@exotics_colombia', '@exoticsco_autos', 'Ambas']
 export const ROLES = ['lead', 'cliente', 'consignante', 'aliado']
 export const ASESORES = ['Simón', 'Roberto']
 export const THERMOS = ['frio', 'tibio', 'caliente']
-// Color por temperatura: frío azul, tibio amarillo, caliente verde
-export const THERMO_TONE = { frio: 'cyan', tibio: 'amber', caliente: 'green' }
+// Color por temperatura: frío azul, tibio amarillo, caliente rojo
+export const THERMO_TONE = { frio: 'cyan', tibio: 'amber', caliente: 'red' }
 
 export const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

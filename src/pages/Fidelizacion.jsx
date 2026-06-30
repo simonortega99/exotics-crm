@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { fmtMoney, fmtMoneyShort, fmtDate, today, addDays, num, loyaltyTier, TIERS, cumpleInfo, uid } from '../lib/utils.js'
+import { fmtMoney, fmtMoneyShort, fmtDate, today, addDays, num, isOverdue, loyaltyTier, TIERS, cumpleInfo, uid } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow } from '../components/ui.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
@@ -16,6 +16,7 @@ export default function Fidelizacion() {
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [showAuto, setShowAuto] = useState(false)
+  const [tab, setTab] = useState('clientes')
   const [accForm, setAccForm] = useState({ tipo: tipos[0], fecha: today(), nota: '' })
   const { user, isAdmin } = useAuth()
 
@@ -74,6 +75,14 @@ export default function Fidelizacion() {
           <Kpi to="/actividades" label="Acciones pendientes" value={pendientes.length} accent="green" />
         </div>
 
+        <div className="filters">
+          <div className="seg">
+            <button className={tab === 'clientes' ? 'on' : ''} onClick={() => setTab('clientes')}>Clientes</button>
+            <button className={tab === 'actividades' ? 'on' : ''} onClick={() => setTab('actividades')}>Actividades de fidelización</button>
+          </div>
+        </div>
+
+        {tab === 'clientes' && <>
         <div style={{ display: 'grid', gridTemplateColumns: selected ? '1.4fr 1fr' : '1fr', gap: 16 }}>
           <div className="table-wrap">
             <table className="data">
@@ -161,6 +170,30 @@ export default function Fidelizacion() {
             </div>
           ))}
         </div>
+        </>}
+
+        {tab === 'actividades' && (
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr>{['', 'Fecha', 'Cliente', 'Acción', ''].map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+              <tbody>
+                {[...acciones].sort((a, b) => (a.fecha < b.fecha ? 1 : -1)).map(a => {
+                  const venc = !a.done && isOverdue(a.fecha)
+                  return (
+                    <tr key={a.id}>
+                      <td><input type="checkbox" checked={a.done} onChange={() => updateItem('actividades', a.id, { done: !a.done })} /></td>
+                      <td className="num">{fmtDate(a.fecha)} {venc && <Badge tone="red">vencida</Badge>}</td>
+                      <td className="cell-strong">{a.cliente || a.lead}</td>
+                      <td style={a.done ? { textDecoration: 'line-through', color: 'var(--text-3)' } : undefined}>{a.titulo}</td>
+                      <td><button className="btn danger sm" onClick={() => confirmDelete('la acción', () => deleteItem('actividades', a.id))}>Eliminar</button></td>
+                    </tr>
+                  )
+                })}
+                {!acciones.length && <EmptyRow colSpan={5}><div className="big">Sin acciones de fidelización</div>Prográmalas desde un cliente o con "+ Programar acción".</EmptyRow>}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Page>
 
       {showForm && <AccionGlobalForm clientes={clientes} tipos={tipos}

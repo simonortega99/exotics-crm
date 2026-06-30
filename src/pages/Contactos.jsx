@@ -17,6 +17,7 @@ export default function Contactos() {
   const [query, setQuery] = useState('')
   const [rolFilter, setRolFilter] = useState('todos')
   const [ownerFilter, setOwnerFilter] = useState('todos')
+  const [sort, setSort] = useState({ campo: 'creado', dir: 'desc' })
   const { user, isAdmin } = useAuth()
   const asesores = data.asesores || ASESORES
   const ownerOptions = isAdmin ? asesores : [user.nombre]
@@ -39,6 +40,19 @@ export default function Contactos() {
       (!q || `${l.nombre} ${l.tel || ''} ${l.email || ''}`.toLowerCase().includes(q))
     )
   }, [visibleLeads, query, rolFilter, ownerFilter])
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    arr.sort((a, b) => {
+      const av = sort.campo === 'nombre' ? (a.nombre || '').toLowerCase() : (a.fechaCreacion || '')
+      const bv = sort.campo === 'nombre' ? (b.nombre || '').toLowerCase() : (b.fechaCreacion || '')
+      const c = av < bv ? -1 : av > bv ? 1 : 0
+      return sort.dir === 'asc' ? c : -c
+    })
+    return arr
+  }, [filtered, sort])
+  const toggleSort = campo => setSort(s => s.campo === campo ? { campo, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { campo, dir: 'asc' })
+  const arrow = campo => sort.campo === campo ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
 
   function handleAddLead(form) {
     addItem('leads', { ...form, fechaCreacion: today() })
@@ -93,10 +107,19 @@ export default function Contactos() {
         <div className="table-wrap">
           <table className="data">
             <thead>
-              <tr>{['Nombre', 'Rol', 'Teléfono', 'Temperatura', 'Vehículo de interés', 'Cumpleaños', 'Creado', ''].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>
+                <th onClick={() => toggleSort('nombre')} style={{ cursor: 'pointer' }}>Nombre{arrow('nombre')}</th>
+                <th>Rol</th>
+                <th>Teléfono</th>
+                <th>Temperatura</th>
+                <th>Vehículo de interés</th>
+                <th>Cumpleaños</th>
+                <th onClick={() => toggleSort('creado')} style={{ cursor: 'pointer' }}>Creado{arrow('creado')}</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.map(l => {
+              {sorted.map(l => {
                 const ci = cumpleInfo(l.cumple)
                 return (
                   <tr key={l.id} className="clickable" onClick={() => setSelected(l.id)}>

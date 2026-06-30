@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth.jsx'
 
 const ESTADO_TONE = { Abierta: 'cyan', Ganada: 'green', Perdida: 'red' }
 const THERMO = THERMO_TONE
-const THERMO_COLOR = { frio: 'var(--cyan-700)', tibio: 'var(--amber)', caliente: 'var(--green)' }
+const THERMO_COLOR = { frio: 'var(--cyan-700)', tibio: 'var(--amber)', caliente: 'var(--red)' }
 const FILTROS = [
   { k: 'abiertas', label: 'Abiertas' },
   { k: 'caliente', label: 'Calientes' },
@@ -34,6 +34,11 @@ export default function Oportunidades() {
   const visibleLeads = isAdmin ? data.leads : data.leads.filter(l => l.owner === user.nombre)
   const invActivo = data.inventario.filter(v => v.estado !== 'Vendido')
   const thermoOf = o => data.leads.find(l => l.id === o.contactoId)?.thermo
+  // Status de seguimiento: "Al día" si hay una tarea pendiente para hoy o futura; si no, "Sin seguimiento".
+  const statusOf = o => {
+    const acts = (data.actividades || []).filter(a => !a.done && (a.oppId === o.id || a.leadId === o.contactoId))
+    return acts.some(a => a.fecha >= today()) ? { label: 'Al día', tone: 'green' } : { label: 'Sin seguimiento', tone: 'red' }
+  }
   const enRango = o => (!desde && !hasta) || inRange(o.fecha, desde || null, hasta || null)
   const abiertas = ops.filter(o => o.estado === 'Abierta' && enRango(o))
 
@@ -74,7 +79,7 @@ export default function Oportunidades() {
       <Page>
         <div className="kpi-grid mb-16">
           <Kpi label="Abiertas" value={abiertas.length} accent="cyan" />
-          <Kpi label="Calientes" value={calientes} accent="green" valueClass="green" />
+          <Kpi label="Calientes" value={calientes} accent="amber" valueClass="red" />
           <Kpi label="Tibios" value={tibios} accent="amber" />
           <Kpi label="Fríos" value={frios} accent="cyan" valueClass="cyan" />
           <Kpi label="Ganadas" value={ganadas} accent="green" />
@@ -101,7 +106,7 @@ export default function Oportunidades() {
         <div className="table-wrap">
           <table className="data">
             <thead>
-              <tr>{['Contacto', 'Temp.', 'Vehículo de interés', 'Valor est.', 'Etapa', 'Estado', ''].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>{['Contacto', 'Temp.', 'Vehículo de interés', 'Valor est.', 'Etapa', 'Estado', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {filtered.map(o => {
@@ -129,15 +134,15 @@ export default function Oportunidades() {
                         : <Badge tone="gray">{OPP_STAGES[o.stage]}</Badge>}
                     </td>
                     <td><Badge tone={ESTADO_TONE[o.estado]} dot>{o.estado}</Badge></td>
+                    <td>{o.estado === 'Abierta' ? (() => { const s = statusOf(o); return <Badge tone={s.tone} dot>{s.label}</Badge> })() : <span className="muted">—</span>}</td>
                     <td>
                       <div className="row gap-6">
-                        {o.estado === 'Abierta' && <button className="btn cyan sm" onClick={() => ganar(o)}>Ganar</button>}
+                        {o.estado === 'Abierta' && <button className="btn sm" onClick={() => perder(o)}>Perder</button>}
                         <Kebab items={[
                           o.contactoId && { label: 'Agendar tarea', onClick: () => setTareaOpp(o) },
                           o.estado === 'Abierta' && { label: 'Editar', onClick: () => setEditing(o) },
-                          o.estado === 'Abierta'
-                            ? { label: 'Marcar perdida', onClick: () => perder(o) }
-                            : { label: 'Reabrir', onClick: () => { updateItem('oportunidades', o.id, { estado: 'Abierta' }); toast('Oportunidad reabierta') } },
+                          o.estado === 'Abierta' && { label: 'Marcar ganada', onClick: () => ganar(o) },
+                          o.estado !== 'Abierta' && { label: 'Reabrir', onClick: () => { updateItem('oportunidades', o.id, { estado: 'Abierta' }); toast('Oportunidad reabierta') } },
                           { label: 'Eliminar', danger: true, onClick: () => confirmDelete('la oportunidad', () => deleteItem('oportunidades', o.id)) },
                         ]} />
                       </div>
@@ -145,7 +150,7 @@ export default function Oportunidades() {
                   </tr>
                 )
               })}
-              {!filtered.length && <EmptyRow colSpan={7}><div className="big">Sin oportunidades</div>Crea una desde aquí o desde la ficha de un contacto.</EmptyRow>}
+              {!filtered.length && <EmptyRow colSpan={8}><div className="big">Sin oportunidades</div>Crea una desde aquí o desde la ficha de un contacto.</EmptyRow>}
             </tbody>
           </table>
         </div>
@@ -156,7 +161,7 @@ export default function Oportunidades() {
       {editing && <OppEditForm op={editing} asesores={ownerOptions} inventario={invActivo}
         onSave={updates => { updateItem('oportunidades', editing.id, updates); if (editing.contactoId) updateItem('leads', editing.contactoId, { thermo: thermoForStage(updates.stage) }); setEditing(null); toast('Oportunidad actualizada') }} onClose={() => setEditing(null)} />}
       {tareaOpp && <TareaModal opp={tareaOpp}
-        onSave={f => { addItem('actividades', { titulo: f.titulo, fecha: f.fecha, tipo: 'Seguimiento', owner: tareaOpp.owner || 'Simón', lead: tareaOpp.contacto, leadId: tareaOpp.contactoId, done: false }); setTareaOpp(null); toast('Tarea agendada · visible en Actividades') }}
+        onSave={f => { addItem('actividades', { titulo: f.titulo, fecha: f.fecha, tipo: 'Seguimiento', owner: tareaOpp.owner || 'Simón', lead: tareaOpp.contacto, leadId: tareaOpp.contactoId, oppId: tareaOpp.id, vehiculo: tareaOpp.vehiculoInteres || '', done: false }); setTareaOpp(null); toast('Tarea agendada · visible en Actividades') }}
         onClose={() => setTareaOpp(null)} />}
     </>
   )

@@ -138,7 +138,7 @@ export default function Actividades() {
                       <td className="num">{fmtDate(a.fecha)} {overdue && <Badge tone="red">vencida</Badge>}</td>
                       <td className="cell-strong" style={a.done ? { textDecoration: 'line-through', color: 'var(--text-3)' } : undefined}>{a.titulo}</td>
                       <td><Badge tone={TIPO_TONE[a.tipo] || 'gray'} dot>{a.tipo}</Badge></td>
-                      <td className="text-2">{a.lead || '—'}</td>
+                      <td className="text-2">{a.lead || '—'}{a.vehiculo ? <span className="text-3"> · {a.vehiculo}</span> : ''}</td>
                       <td className="text-2">{a.owner || '—'}</td>
                       <td>
                         <Kebab items={[
