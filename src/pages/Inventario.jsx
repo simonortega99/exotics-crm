@@ -1,6 +1,6 @@
 import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls } from '../lib/utils.js'
+import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
 import { Download } from 'lucide-react'
@@ -15,10 +15,23 @@ export default function Inventario() {
   const [editing, setEditing] = useState(null)
   const [filtro, setFiltro] = useState('Activos')
   const [openId, setOpenId] = useState(null)
+  const [sort, setSort] = useState({ campo: 'vehiculo', dir: 'asc' })
 
   const inv = data.inventario
   const matchFiltro = v => filtro === 'Todos' ? true : filtro === 'Vendidos' ? v.estado === 'Vendido' : v.estado !== 'Vendido'
-  const list = inv.filter(matchFiltro)
+  const sortVal = (v, campo) => campo === 'vehiculo' ? `${v.marca} ${v.modelo}`.toLowerCase()
+    : campo === 'anio' ? num(v.anio)
+    : campo === 'precio' ? num(v.precio)
+    : campo === 'comision' ? num(v.comision)
+    : campo === 'dias' ? (v.fechaIngreso ? daysSince(v.fechaIngreso) : -1)
+    : (v[campo] || '')
+  const list = inv.filter(matchFiltro).sort((a, b) => {
+    const av = sortVal(a, sort.campo), bv = sortVal(b, sort.campo)
+    const c = av < bv ? -1 : av > bv ? 1 : 0
+    return sort.dir === 'asc' ? c : -c
+  })
+  const toggleSort = campo => setSort(s => s.campo === campo ? { campo, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { campo, dir: 'asc' })
+  const arrow = campo => sort.campo === campo ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
   const disponibles = inv.filter(v => v.estado === 'Disponible')
   const valorStock = inv.filter(v => v.estado !== 'Vendido').reduce((a, v) => a + num(v.precio), 0)
   const diasProm = disponibles.length
@@ -33,8 +46,8 @@ export default function Inventario() {
     return [...map.values()]
   }
   function exportar() {
-    const headers = ['Marca', 'Modelo', 'Año', 'Placa', 'Tipo', 'Estado', 'Precio', 'Comisión %', 'Días en stock', 'Contacto', 'Referido por', '% Com. referido', 'Asesor', 'Fecha ingreso']
-    const rows = list.map(v => [v.marca, v.modelo, v.anio, v.placa, v.tipo, v.estado, v.precio, v.comision, v.fechaIngreso ? daysSince(v.fechaIngreso) : '', v.contactoNombre, v.referidoPor, v.comisionReferido, v.owner, v.fechaIngreso])
+    const headers = ['Marca', 'Modelo', 'Año', 'Placa', 'Motor', 'Tipo', 'Estado', 'Precio', 'Comisión %', 'Días en stock', 'Contacto', 'Referido por', '% Com. referido', 'Asesor', 'Fecha ingreso']
+    const rows = list.map(v => [v.marca, v.modelo, v.anio, v.placa, v.motor, v.tipo, v.estado, v.precio, v.comision, v.fechaIngreso ? daysSince(v.fechaIngreso) : '', v.contactoNombre, v.referidoPor, v.comisionReferido, v.owner, v.fechaIngreso])
     exportarHojaXls(`Inventario_${today()}.xls`, 'Inventario · Exotics Co.', headers, rows)
     toast('Inventario exportado')
   }
@@ -70,7 +83,17 @@ export default function Inventario() {
         <div className="table-wrap">
           <table className="data">
             <thead>
-              <tr>{['Vehículo', 'Año', 'Tipo', 'Estado', 'Precio', 'Comisión', 'Días', 'Interesados', ''].map((h, i) => <th key={i}>{h}</th>)}</tr>
+              <tr>
+                <th onClick={() => toggleSort('vehiculo')} style={{ cursor: 'pointer' }}>Vehículo{arrow('vehiculo')}</th>
+                <th onClick={() => toggleSort('anio')} style={{ cursor: 'pointer' }}>Año{arrow('anio')}</th>
+                <th onClick={() => toggleSort('tipo')} style={{ cursor: 'pointer' }}>Tipo{arrow('tipo')}</th>
+                <th onClick={() => toggleSort('estado')} style={{ cursor: 'pointer' }}>Estado{arrow('estado')}</th>
+                <th onClick={() => toggleSort('precio')} style={{ cursor: 'pointer' }}>Precio{arrow('precio')}</th>
+                <th onClick={() => toggleSort('comision')} style={{ cursor: 'pointer' }}>Comisión{arrow('comision')}</th>
+                <th onClick={() => toggleSort('dias')} style={{ cursor: 'pointer' }}>Días{arrow('dias')}</th>
+                <th>Interesados</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               {list.map(v => {
@@ -83,7 +106,7 @@ export default function Inventario() {
                     <tr className="clickable" onClick={() => setOpenId(open ? null : v.id)}>
                       <td>
                         <div className="cell-strong">{v.marca} {v.modelo} <span className="text-3">{expandible ? (open ? '▾' : '▸') : ''}</span></div>
-                        {v.placa && <div className="text-3" style={{ fontSize: 11 }}>Placa: {v.placa}</div>}
+                        {(v.placa || v.motor) && <div className="text-3" style={{ fontSize: 11 }}>{[v.placa && `Placa: ${v.placa}`, v.motor].filter(Boolean).join(' · ')}</div>}
                         {v.contactoNombre && <div className="text-3" style={{ fontSize: 11 }}>{v.tipo === 'Aliado' ? 'Aliado' : 'Consignante'}: {v.contactoNombre}</div>}
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
                       </td>
@@ -178,7 +201,7 @@ function DatoVenta({ label, valor }) {
 
 function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || {
-    marca: '', modelo: '', anio: '', placa: '', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
+    marca: '', modelo: '', anio: '', placa: '', motor: 'Gasolina', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
     fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '',
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
@@ -203,6 +226,9 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
         <Field label="% Comisión"><input className="input" value={form.comision} onChange={e => set('comision', e.target.value)} placeholder="ej. 5" /></Field>
         <Field label="Tipo">
           <select className="select" value={form.tipo} onChange={e => set('tipo', e.target.value)}>{TIPOS_VEHICULO.map(t => <option key={t}>{t}</option>)}</select>
+        </Field>
+        <Field label="Motorización">
+          <select className="select" value={form.motor || 'Gasolina'} onChange={e => set('motor', e.target.value)}>{MOTORES.map(m => <option key={m}>{m}</option>)}</select>
         </Field>
       </div>
       {needsLink && (

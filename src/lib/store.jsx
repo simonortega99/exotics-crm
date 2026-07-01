@@ -22,6 +22,8 @@ const initialState = {
   ventas: [],
   fidelidad: [],      // acciones de fidelización (log)
   actividades: [],
+  citas: [],          // citas para mostrar vehículos
+  picoPlaca: { 1: [], 2: [], 3: [], 4: [], 5: [] }, // dígitos restringidos por día (1=Lun … 5=Vie)
   contenidos: [],
   finanzas: [],
   asesores: ['Simón', 'Roberto'],
@@ -54,6 +56,8 @@ function migrate(state) {
   if (s.metaAnual == null) s.metaAnual = (s.meta || 8) * 12
   if (!Array.isArray(s.fidelidadPlantillas)) s.fidelidadPlantillas = initialState.fidelidadPlantillas
   if (!Array.isArray(s.fidelidadTipos) || !s.fidelidadTipos.length) s.fidelidadTipos = initialState.fidelidadTipos
+  if (!Array.isArray(s.citas)) s.citas = []
+  if (!s.picoPlaca || typeof s.picoPlaca !== 'object') s.picoPlaca = { 1: [], 2: [], 3: [], 4: [], 5: [] }
   // El rol 'concesionario' se unifica con 'aliado'
   ;(s.leads || []).forEach(l => { if (l.rol === 'concesionario') l.rol = 'aliado' })
   if (!s._migratedOpps) {

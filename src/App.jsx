@@ -16,6 +16,7 @@ import Busquedas from './pages/Busquedas.jsx'
 import Ventas from './pages/Ventas.jsx'
 import Fidelizacion from './pages/Fidelizacion.jsx'
 import Actividades from './pages/Actividades.jsx'
+import Citas from './pages/Citas.jsx'
 
 function Shell() {
   const { user } = useAuth()
@@ -36,6 +37,7 @@ function Shell() {
             <Route path="/ventas" element={<Ventas />} />
             <Route path="/fidelizacion" element={<Fidelizacion />} />
             <Route path="/actividades" element={<Actividades />} />
+            <Route path="/citas" element={<Citas />} />
           </Routes>
         </main>
       </div>

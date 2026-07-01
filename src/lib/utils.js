@@ -14,6 +14,8 @@ export function thermoForStage(stage) {
   return 'frio'                      // Nuevo lead / Información enviada
 }
 export const TIPOS_VEHICULO = ['Propio', 'Consignación', 'Aliado', 'Retoma']
+export const MOTORES = ['Gasolina', 'Híbrido', 'Eléctrico', 'Diésel']
+export const DIAS_LV = [['1', 'Lunes'], ['2', 'Martes'], ['3', 'Miércoles'], ['4', 'Jueves'], ['5', 'Viernes']]
 export const ESTADOS_VEHICULO = ['Disponible', 'Reservado', 'Vendido']
 export const CUENTAS_REDES = ['@exotics_colombia', '@exoticsco_autos', 'Ambas']
 export const ROLES = ['lead', 'cliente', 'consignante', 'aliado']
@@ -184,6 +186,31 @@ export function cumpleInfo(cumpleStr) {
   const t = new Date(); t.setHours(0, 0, 0, 0)
   if (next < t) next = new Date(now.getFullYear() + 1, +m - 1, +d)
   return { diff: Math.round((next - t) / 86400000) }
+}
+
+// ============================================================
+// Pico y placa
+// ============================================================
+export function ultimoDigitoPlaca(placa) {
+  if (!placa) return null
+  const m = String(placa).match(/(\d)(?=\D*$)/) // último dígito numérico
+  return m ? +m[1] : null
+}
+export function weekdayOf(fecha) {
+  if (!fecha) return null
+  const [y, m, d] = fecha.split('-').map(Number)
+  return new Date(y, m - 1, d).getDay() // 0=Dom … 6=Sáb
+}
+// Devuelve true si la placa tiene pico y placa ese día según la config.
+export function picoPlacaRestringido(placa, motor, fecha, config) {
+  if (!placa || !fecha) return false
+  if (motor === 'Híbrido' || motor === 'Eléctrico') return false // exentos
+  const wd = weekdayOf(fecha)
+  if (wd < 1 || wd > 5) return false // solo lunes a viernes
+  const dig = ultimoDigitoPlaca(placa)
+  if (dig == null) return false
+  const restr = (config && config[wd]) || []
+  return restr.map(Number).includes(dig)
 }
 
 // ============================================================

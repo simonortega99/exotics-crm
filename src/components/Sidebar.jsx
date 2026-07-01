@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard, Calendar, Users, Target, Filter, Car, ArrowLeftRight,
+  LayoutDashboard, Calendar, CalendarClock, Users, Target, Filter, Car, ArrowLeftRight,
   Search, Receipt, Heart, UsersRound, LogOut, X, Plus,
 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
@@ -15,6 +15,7 @@ const NAV = [
   { section: 'Principal', items: [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/actividades', label: 'Actividades', icon: Calendar, badge: 'act' },
+    { to: '/citas', label: 'Citas', icon: CalendarClock },
     { to: '/contactos', label: 'Contactos', icon: Users },
     { to: '/oportunidades', label: 'Oportunidades', icon: Target },
     { to: '/funnel', label: 'Funnel', icon: Filter },
