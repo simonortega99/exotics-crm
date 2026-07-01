@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import {
-  fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, daysSince, num, ASESORES,
+  fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, daysSince, num, ASESORES, MESES, ymOf,
   inRange, monthRange, yearRange, ytdRange, shiftYear, addMonths, nextBirthdayDate,
 } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
@@ -24,7 +24,8 @@ export default function Ventas() {
   const { user, isAdmin } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [modo, setModo] = useState('simple') // simple | comparar
+  const [modo, setModo] = useState('simple') // simple | comparar | grafico
+  const [gYear, setGYear] = useState(new Date().getFullYear())
 
   const ventas = isAdmin ? data.ventas : data.ventas.filter(v => v.owner === user.nombre)
   const ownerOptions = isAdmin ? (data.asesores || ASESORES) : [user.nombre]
@@ -55,7 +56,7 @@ export default function Ventas() {
       vehiculoId: form.vehiculoId || '', cliente: cliente?.nombre || '', clienteId: form.clienteId || '',
       precio: num(form.precio), comisionPct: form.comisionPct, comision: num(form.comision),
       ganancia: num(form.ganancia) || num(form.comision), owner: form.owner || 'Simón',
-      fuente: form.fuente, credito: form.credito, seguro: form.seguro,
+      fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota || '',
       diasVenta, esAliado: !vehiculo,
     })
     if (vehiculo) updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
@@ -92,6 +93,12 @@ export default function Ventas() {
     ['Año pasado', yearRange(curY - 1)],
   ]
 
+  // Datos para el gráfico mensual
+  const gYears = (() => { const s = new Set([curY]); ventas.forEach(v => { const ym = ymOf(v.fecha); if (ym) s.add(ym.y) }); return [...s].sort((a, b) => b - a) })()
+  const gConteo = Array(12).fill(0), gIngresos = Array(12).fill(0)
+  ventas.forEach(v => { const ym = ymOf(v.fecha); if (ym && ym.y === gYear) { gConteo[ym.m - 1]++; gIngresos[ym.m - 1] += (num(v.ganancia) || num(v.comision)) } })
+  const gMax = Math.max(1, ...gConteo)
+
   return (
     <>
       <Topbar title="Ventas" sub={modo === 'simple' ? fmtRange(aDesde, aHasta) : `${fmtRange(aDesde, aHasta)} vs ${fmtRange(bDesde, bHasta)}`}>
@@ -102,8 +109,31 @@ export default function Ventas() {
           <div className="seg">
             <button className={modo === 'simple' ? 'on' : ''} onClick={() => setModo('simple')}>Periodo</button>
             <button className={modo === 'comparar' ? 'on' : ''} onClick={() => setModo('comparar')}>Comparar 2 rangos</button>
+            <button className={modo === 'grafico' ? 'on' : ''} onClick={() => setModo('grafico')}>Gráfico</button>
           </div>
         </div>
+
+        {modo === 'grafico' ? (
+          <Card>
+            <div className="row between mb-16">
+              <span className="card-title">Ventas por mes · {gYear}</span>
+              <select className="select" style={{ width: 110 }} value={gYear} onChange={e => setGYear(+e.target.value)}>
+                {gYears.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 200 }}>
+              {gConteo.map((n, i) => (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}
+                  title={`${MESES[i]}: ${n} ventas · ${fmtMoneyShort(gIngresos[i])}`}>
+                  <div className="num" style={{ fontSize: 12, fontWeight: 700, color: n ? 'var(--text)' : 'var(--text-3)' }}>{n || ''}</div>
+                  <div style={{ width: '100%', height: `${(n / gMax) * 150}px`, minHeight: n ? 4 : 0, background: 'linear-gradient(180deg, var(--cyan), var(--cyan-600))', borderRadius: '6px 6px 0 0' }} />
+                  <div className="text-3" style={{ fontSize: 10 }}>{MESES[i].slice(0, 3)}</div>
+                </div>
+              ))}
+            </div>
+            <div className="text-3 mt-16" style={{ fontSize: 12 }}>Total {gYear}: <b>{gConteo.reduce((a, b) => a + b, 0)}</b> ventas · <b className="t-green">{fmtMoneyShort(gIngresos.reduce((a, b) => a + b, 0))}</b> en ingresos generados</div>
+          </Card>
+        ) : (<>
 
         <Card className="mb-16">
           <div className="row gap-12 wrap" style={{ alignItems: 'flex-end' }}>
@@ -166,7 +196,7 @@ export default function Ventas() {
               {[...enA].sort((x, y) => (x.fecha < y.fecha ? 1 : -1)).map(v => (
                 <tr key={v.id}>
                   <td className="num">{fmtDate(v.fecha)}</td>
-                  <td className="cell-strong">{v.vehiculo || '—'}</td>
+                  <td className="cell-strong">{v.vehiculo || '—'}{v.nota ? <span title={v.nota} style={{ cursor: 'help' }}> 📝</span> : ''}</td>
                   <td>{v.cliente || <span className="muted">—</span>}</td>
                   <td className="text-2">{v.owner || '—'}</td>
                   <td className="text-2">
@@ -192,6 +222,7 @@ export default function Ventas() {
             </tbody>
           </table>
         </div>
+        </>)}
       </Page>
 
       {showForm && <VentaForm leads={visibleLeads} asesores={ownerOptions} inventario={data.inventario.filter(v => v.estado !== 'Vendido')}
@@ -206,7 +237,7 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
   const [form, setForm] = useState({
     fecha: venta.fecha || today(), owner: venta.owner || asesores[0] || 'Simón',
     clienteId: venta.clienteId || '', precio: venta.precio || '', comision: venta.comision || '', ganancia: venta.ganancia || '',
-    fuente: venta.fuente || 'Directo', credito: venta.credito || 'Ninguno', seguro: venta.seguro || 'Ninguno',
+    fuente: venta.fuente || 'Directo', credito: venta.credito || 'Ninguno', seguro: venta.seguro || 'Ninguno', nota: venta.nota || '',
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
   function save() {
@@ -215,7 +246,7 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
       fecha: form.fecha, owner: form.owner,
       clienteId: form.clienteId, cliente: cliente ? cliente.nombre : venta.cliente,
       precio: num(form.precio), comision: num(form.comision), ganancia: num(form.ganancia) || num(form.comision),
-      fuente: form.fuente, credito: form.credito, seguro: form.seguro,
+      fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota,
     })
   }
   return (
@@ -245,6 +276,7 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
         <Field label="Crédito"><select className="select" value={form.credito} onChange={e => set('credito', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
         <Field label="Seguro"><select className="select" value={form.seguro} onChange={e => set('seguro', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
       </div>
+      <Field label="Nota / comentarios"><textarea className="input" rows={2} value={form.nota} onChange={e => set('nota', e.target.value)} placeholder="Opcional" /></Field>
     </Modal>
   )
 }
@@ -283,7 +315,7 @@ function CompareRow({ label, a, b, fmt }) {
 }
 
 function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
-  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'Ninguno', seguro: 'Ninguno' })
+  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'Ninguno', seguro: 'Ninguno', nota: '' })
 
   function pickVehiculo(id) {
     const v = inventario.find(x => x.id === id)
@@ -339,6 +371,7 @@ function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
           <select className="select" value={form.seguro} onChange={e => setForm({ ...form, seguro: e.target.value })}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select>
         </Field>
       </div>
+      <Field label="Nota / comentarios"><textarea className="input" rows={2} value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} placeholder="Opcional" /></Field>
     </Modal>
   )
 }

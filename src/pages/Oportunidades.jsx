@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtRange, today, addDays, num, inRange } from '../lib/utils.js'
+import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
+import { crearCita } from '../lib/citas.js'
 
 const ESTADO_TONE = { Abierta: 'cyan', Ganada: 'green', Perdida: 'red' }
 const THERMO = THERMO_TONE
@@ -21,6 +22,7 @@ export default function Oportunidades() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [tareaOpp, setTareaOpp] = useState(null)
+  const [citaOpp, setCitaOpp] = useState(null)
   const [filtro, setFiltro] = useState('abiertas')
   const [ownerFilter, setOwnerFilter] = useState('todos')
   const [desde, setDesde] = useState('')
@@ -34,10 +36,12 @@ export default function Oportunidades() {
   const visibleLeads = isAdmin ? data.leads : data.leads.filter(l => l.owner === user.nombre)
   const invActivo = data.inventario.filter(v => v.estado !== 'Vendido')
   const thermoOf = o => data.leads.find(l => l.id === o.contactoId)?.thermo
-  // Status de seguimiento: "Al día" si hay una tarea pendiente para hoy o futura; si no, "Sin seguimiento".
+  // Status: sin actividades → nada; con tarea vencida → "Sin seguimiento"; si no → "Al día".
   const statusOf = o => {
     const acts = (data.actividades || []).filter(a => !a.done && (a.oppId === o.id || a.leadId === o.contactoId))
-    return acts.some(a => a.fecha >= today()) ? { label: 'Al día', tone: 'green' } : { label: 'Sin seguimiento', tone: 'red' }
+    if (!acts.length) return null
+    if (acts.some(a => isOverdue(a.fecha))) return { label: 'Sin seguimiento', tone: 'red' }
+    return { label: 'Al día', tone: 'green' }
   }
   const enRango = o => (!desde && !hasta) || inRange(o.fecha, desde || null, hasta || null)
   const abiertas = ops.filter(o => o.estado === 'Abierta' && enRango(o))
@@ -134,12 +138,13 @@ export default function Oportunidades() {
                         : <Badge tone="gray">{OPP_STAGES[o.stage]}</Badge>}
                     </td>
                     <td><Badge tone={ESTADO_TONE[o.estado]} dot>{o.estado}</Badge></td>
-                    <td>{o.estado === 'Abierta' ? (() => { const s = statusOf(o); return <Badge tone={s.tone} dot>{s.label}</Badge> })() : <span className="muted">—</span>}</td>
+                    <td>{o.estado === 'Abierta' ? (() => { const s = statusOf(o); return s ? <Badge tone={s.tone} dot>{s.label}</Badge> : <span className="muted">—</span> })() : <span className="muted">—</span>}</td>
                     <td>
                       <div className="row gap-6">
                         {o.estado === 'Abierta' && <button className="btn sm" onClick={() => perder(o)}>Perder</button>}
                         <Kebab items={[
                           o.contactoId && { label: 'Agendar tarea', onClick: () => setTareaOpp(o) },
+                          o.contactoId && { label: 'Agendar cita', onClick: () => setCitaOpp(o) },
                           o.estado === 'Abierta' && { label: 'Editar', onClick: () => setEditing(o) },
                           o.estado === 'Abierta' && { label: 'Marcar ganada', onClick: () => ganar(o) },
                           o.estado !== 'Abierta' && { label: 'Reabrir', onClick: () => { updateItem('oportunidades', o.id, { estado: 'Abierta' }); toast('Oportunidad reabierta') } },
@@ -163,6 +168,9 @@ export default function Oportunidades() {
       {tareaOpp && <TareaModal opp={tareaOpp}
         onSave={f => { addItem('actividades', { titulo: f.titulo, fecha: f.fecha, tipo: 'Seguimiento', owner: tareaOpp.owner || 'Simón', lead: tareaOpp.contacto, leadId: tareaOpp.contactoId, oppId: tareaOpp.id, vehiculo: tareaOpp.vehiculoInteres || '', done: false }); setTareaOpp(null); toast('Tarea agendada · visible en Actividades') }}
         onClose={() => setTareaOpp(null)} />}
+      {citaOpp && <CitaQuickModal opp={citaOpp} inventario={data.inventario} picoPlaca={data.picoPlaca || {}}
+        onSave={c => { crearCita(addItem, updateItem, c); setCitaOpp(null); toast('Cita agendada · visible en Citas y Actividades') }}
+        onClose={() => setCitaOpp(null)} />}
     </>
   )
 }
@@ -210,6 +218,32 @@ function OppForm({ leads, asesores, inventario, onSave, onClose }) {
           </label>
         </Field>
       </div>
+    </Modal>
+  )
+}
+
+function CitaQuickModal({ opp, inventario, picoPlaca, onSave, onClose }) {
+  const veh = inventario.find(v => v.id === opp.vehiculoId)
+  const [form, setForm] = useState({ fecha: today(), hora: '', lugar: '' })
+  const pp = veh && picoPlacaRestringido(veh.placa, veh.motor, form.fecha, picoPlaca)
+  function save() {
+    onSave({
+      fecha: form.fecha, hora: form.hora, lugar: form.lugar, nota: '',
+      clienteId: opp.contactoId, cliente: opp.contacto,
+      vehiculoId: opp.vehiculoId || '', vehiculo: veh ? `${veh.marca} ${veh.modelo} ${veh.anio || ''}`.trim() : (opp.vehiculoInteres || ''),
+      placa: veh?.placa || '', motor: veh?.motor || '', owner: opp.owner || 'Simón', done: false,
+    })
+  }
+  return (
+    <Modal title={`Agendar cita · ${opp.contacto}`} onClose={onClose} width={420}
+      footer={<ModalButtons onClose={onClose} onSave={save} saveLabel="Agendar" />}>
+      <div className="text-3 mb-12" style={{ fontSize: 12 }}>Vehículo: <b>{veh ? `${veh.marca} ${veh.modelo}` : (opp.vehiculoInteres || 'sin definir')}</b>{veh?.placa ? ` · ${veh.placa}` : ''}</div>
+      <div className="form-grid cols-2">
+        <Field label="Fecha"><input className="input" type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></Field>
+        <Field label="Hora"><input className="input" type="time" value={form.hora} onChange={e => setForm({ ...form, hora: e.target.value })} /></Field>
+      </div>
+      {veh && <div className="card" style={{ background: pp ? 'var(--red-soft)' : 'var(--green-soft)', boxShadow: 'none', padding: '9px 12px', margin: '4px 0 12px', fontSize: 12.5, fontWeight: 600, color: pp ? 'var(--red)' : 'var(--green)' }}>{pp ? `⚠️ Pico y placa ese día (${veh.placa}).` : 'Sin pico y placa ese día ✓'}</div>}
+      <Field label="Lugar"><input className="input" value={form.lugar} onChange={e => setForm({ ...form, lugar: e.target.value })} placeholder="Ej. Vitrina, domicilio…" /></Field>
     </Modal>
   )
 }

@@ -61,7 +61,7 @@ export default function Contactos() {
   }
   function addTask() {
     if (!taskTitle || !taskDate || !lead) return
-    addItem('actividades', { titulo: taskTitle, fecha: taskDate, tipo: 'Seguimiento', owner: lead.owner || 'Simón', lead: lead.nombre, leadId: lead.id, done: false })
+    addItem('actividades', { titulo: taskTitle, fecha: taskDate, tipo: 'Seguimiento', owner: lead.owner || 'Simón', lead: lead.nombre, leadId: lead.id, vehiculo: lead.vehiculoInteres || '', done: false })
     setTaskTitle(''); setTaskDate('')
     toast('Tarea agregada a la agenda')
   }

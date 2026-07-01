@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
-import { fmtDate, today, isOverdue, inRange, weekRange, picoPlacaRestringido, DIAS_LV, ASESORES } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab } from '../components/ui.jsx'
+import { fmtDate, today, picoPlacaRestringido, DIAS_LV, ASESORES } from '../lib/utils.js'
+import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, Kebab } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
+import { crearCita } from '../lib/citas.js'
 import { CalendarClock } from 'lucide-react'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
@@ -15,10 +16,7 @@ export default function Citas() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [showConfig, setShowConfig] = useState(false)
-  const [vista, setVista] = useState('lista')
-  const [filtro, setFiltro] = useState('semana') // hoy | semana
   const [selDay, setSelDay] = useState(today())
-  const [formDate, setFormDate] = useState(today())
 
   const picoPlaca = data.picoPlaca || {}
   const invActivo = data.inventario.filter(v => v.estado !== 'Vendido')
@@ -28,19 +26,13 @@ export default function Citas() {
   const ownerOptions = isAdmin ? asesores : [user.nombre]
 
   const todas = (data.citas || []).filter(c => isAdmin || c.owner === user.nombre)
-  const [wkStart, wkEnd] = weekRange()
-  const hoyN = todas.filter(c => c.fecha === today() && !c.done).length
-  const semanaN = todas.filter(c => inRange(c.fecha, wkStart, wkEnd) && !c.done).length
-
-  const enFiltro = c => filtro === 'hoy' ? c.fecha === today() : inRange(c.fecha, wkStart, wkEnd)
-  const lista = todas.filter(enFiltro).sort((a, b) => (a.fecha + (a.hora || '') > b.fecha + (b.hora || '') ? 1 : -1))
   const events = todas.map(c => ({ id: c.id, date: c.fecha, label: `${c.hora ? c.hora + ' ' : ''}${c.cliente || c.vehiculo || 'Cita'}`, tone: c.done ? 'done' : (picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca) ? 'red' : 'cyan') }))
-  const delDia = todas.filter(c => c.fecha === selDay)
+  const delDia = todas.filter(c => c.fecha === selDay).sort((a, b) => ((a.hora || '') > (b.hora || '') ? 1 : -1))
+  const ppDia = delDia.filter(c => picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)).length
 
-  const pick = f => { setFiltro(f); setVista('lista') }
-  function openForm(date) { setEditing(null); setFormDate(date || today()); setShowForm(true) }
+  function openForm(date) { setEditing(null); setShowForm(true); setSelDay(date || selDay) }
 
-  function save(f) {
+  function guardar(f) {
     const v = data.inventario.find(x => x.id === f.vehiculoId)
     const cliente = data.leads.find(l => l.id === f.clienteId)
     const cita = {
@@ -49,91 +41,74 @@ export default function Citas() {
       vehiculoId: f.vehiculoId, vehiculo: v ? vehName(v) : '', placa: v?.placa || '', motor: v?.motor || '',
       owner: f.owner || user.nombre, done: editing ? editing.done : false,
     }
-    if (editing) { updateItem('citas', editing.id, cita); toast('Cita actualizada') }
-    else { addItem('citas', cita); toast('Cita programada') }
+    if (editing) {
+      updateItem('citas', editing.id, cita)
+      if (editing.actId) updateItem('actividades', editing.actId, { fecha: cita.fecha, titulo: `Cita: ${cita.cliente || cita.vehiculo || 'vehículo'}`, lead: cita.cliente, vehiculo: cita.vehiculo })
+      toast('Cita actualizada')
+    } else {
+      crearCita(addItem, updateItem, cita)
+      toast('Cita programada · visible en Actividades')
+    }
     setShowForm(false); setEditing(null)
+  }
+
+  function toggle(c) {
+    updateItem('citas', c.id, { done: !c.done })
+    if (c.actId) updateItem('actividades', c.actId, { done: !c.done })
+  }
+  function eliminar(c) {
+    confirmDelete('la cita', () => { deleteItem('citas', c.id); if (c.actId) deleteItem('actividades', c.actId) })
   }
 
   return (
     <>
       <Topbar title="Citas" sub="Muestras de vehículos a clientes">
         {isAdmin && <button className="btn" onClick={() => setShowConfig(true)}><CalendarClock size={14} /> Pico y placa</button>}
-        <button className="btn cyan" onClick={() => openForm(vista === 'calendario' ? selDay : today())}>+ Nueva cita</button>
+        <button className="btn cyan" onClick={() => openForm(selDay)}>+ Nueva cita</button>
       </Topbar>
       <Page>
-        <div className="kpi-grid mb-16" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 240px))' }}>
-          <Kpi label="Hoy" value={hoyN} accent="cyan" onClick={() => pick('hoy')} active={filtro === 'hoy'} />
-          <Kpi label="Esta semana" value={semanaN} accent="amber" onClick={() => pick('semana')} active={filtro === 'semana'} />
+        <div className="kpi-grid mb-16" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 260px))' }}>
+          <Kpi label={`Citas · ${fmtDate(selDay)}`} value={delDia.length} accent="cyan" />
+          <Kpi label="Con pico y placa ese día" value={ppDia} accent="amber" valueClass={ppDia ? 'red' : ''} />
         </div>
 
-        <div className="filters">
-          <div className="seg">
-            <button className={vista === 'lista' ? 'on' : ''} onClick={() => setVista('lista')}>Lista</button>
-            <button className={vista === 'calendario' ? 'on' : ''} onClick={() => setVista('calendario')}>Calendario</button>
-          </div>
-        </div>
-
-        {vista === 'calendario' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
-            <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} /></div>
-            <div className="card" style={{ alignSelf: 'start' }}>
-              <div className="row between mb-12">
-                <span className="section-title" style={{ fontSize: 14 }}>{fmtDate(selDay)}</span>
-                <button className="btn cyan sm" onClick={() => openForm(selDay)}>+ Cita</button>
-              </div>
-              {delDia.map(c => {
-                const pp = picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)
-                return (
-                  <div key={c.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
-                    <div className="row between">
-                      <span className="cell-strong" style={{ fontSize: 12.5 }}>{c.hora ? c.hora + ' · ' : ''}{c.cliente || '—'}</span>
-                      <button className="btn danger sm" onClick={() => confirmDelete('la cita', () => deleteItem('citas', c.id))}>×</button>
-                    </div>
-                    <div className="text-3" style={{ fontSize: 11.5 }}>{c.vehiculo}{c.placa ? ` · ${c.placa}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}</div>
-                  </div>
-                )
-              })}
-              {!delDia.length && <div className="text-3" style={{ fontSize: 12.5, padding: '6px 0' }}>Sin citas este día.</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+          <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} /></div>
+          <div className="card" style={{ alignSelf: 'start' }}>
+            <div className="row between mb-12">
+              <span className="section-title" style={{ fontSize: 14 }}>{fmtDate(selDay)}</span>
+              <button className="btn cyan sm" onClick={() => openForm(selDay)}>+ Cita</button>
             </div>
+            {delDia.map(c => {
+              const pp = picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)
+              return (
+                <div key={c.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
+                  <div className="row between gap-8">
+                    <label className="row gap-8" style={{ flex: 1, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!c.done} onChange={() => toggle(c)} />
+                      <span className="cell-strong" style={{ fontSize: 12.5, textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-3)' : 'var(--text)' }}>
+                        {c.hora ? c.hora + ' · ' : ''}{c.cliente || '—'}
+                      </span>
+                    </label>
+                    <Kebab items={[
+                      { label: 'Editar', onClick: () => { setEditing(c); setShowForm(true) } },
+                      { label: 'Eliminar', danger: true, onClick: () => eliminar(c) },
+                    ]} />
+                  </div>
+                  <div className="text-3" style={{ fontSize: 11.5, paddingLeft: 24 }}>
+                    {c.vehiculo || 'Vehículo'}{c.placa ? ` · ${c.placa}` : ''}{c.lugar ? ` · ${c.lugar}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}
+                  </div>
+                </div>
+              )
+            })}
+            {!delDia.length && <div className="text-3" style={{ fontSize: 12.5, padding: '6px 0' }}>Sin citas este día.</div>}
           </div>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>{['', 'Fecha', 'Hora', 'Cliente', 'Vehículo', 'Lugar', 'Pico y placa', ''].map((h, i) => <th key={i}>{h}</th>)}</tr>
-              </thead>
-              <tbody>
-                {lista.map(c => {
-                  const pp = picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)
-                  const venc = !c.done && isOverdue(c.fecha)
-                  return (
-                    <tr key={c.id} style={c.fecha === today() && !c.done ? { background: 'var(--cyan-soft)' } : undefined}>
-                      <td><input type="checkbox" checked={!!c.done} onChange={() => updateItem('citas', c.id, { done: !c.done })} title="Marcar realizada" /></td>
-                      <td className="num">{fmtDate(c.fecha)} {venc && <Badge tone="red">vencida</Badge>}</td>
-                      <td className="num text-2">{c.hora || '—'}</td>
-                      <td className="cell-strong" style={c.done ? { textDecoration: 'line-through', color: 'var(--text-3)' } : undefined}>{c.cliente || '—'}</td>
-                      <td>{c.vehiculo || '—'}{c.placa ? <span className="text-3"> · {c.placa}</span> : ''}</td>
-                      <td className="text-2">{c.lugar || '—'}</td>
-                      <td>{pp ? <Badge tone="red" dot>Restringido</Badge> : <Badge tone="green">Sin restricción</Badge>}</td>
-                      <td>
-                        <Kebab items={[
-                          { label: 'Editar', onClick: () => { setEditing(c); setShowForm(true) } },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete('la cita', () => deleteItem('citas', c.id)) },
-                        ]} />
-                      </td>
-                    </tr>
-                  )
-                })}
-                {!lista.length && <EmptyRow colSpan={8}><div className="big">Sin citas {filtro === 'hoy' ? 'hoy' : 'esta semana'}</div>Agenda una muestra de vehículo a un cliente.</EmptyRow>}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </div>
         <div className="text-3 mt-8" style={{ fontSize: 11.5 }}>Los vehículos híbridos y eléctricos están exentos de pico y placa. Configura los días desde el botón "Pico y placa".</div>
       </Page>
 
-      {showForm && <CitaForm initial={editing} presetFecha={formDate} leads={leads} oportunidades={oportunidades} inventario={invActivo} asesores={ownerOptions} picoPlaca={picoPlaca}
-        onSave={save} onClose={() => { setShowForm(false); setEditing(null) }} />}
+      {showForm && <CitaForm initial={editing} presetFecha={selDay} leads={leads} oportunidades={oportunidades} inventario={invActivo} asesores={ownerOptions} picoPlaca={picoPlaca}
+        onSave={guardar} onClose={() => { setShowForm(false); setEditing(null) }} />}
       {showConfig && <PicoPlacaModal picoPlaca={picoPlaca} onSave={pp => { setField('picoPlaca', pp); toast('Pico y placa actualizado') }} onClose={() => setShowConfig(false)} />}
     </>
   )
@@ -147,7 +122,6 @@ function CitaForm({ initial, presetFecha, leads, oportunidades, inventario, ases
   const veh = inventario.find(v => v.id === form.vehiculoId) || (initial && initial.vehiculoId ? { placa: initial.placa, motor: initial.motor } : null)
   const pp = veh && picoPlacaRestringido(veh.placa, veh.motor, form.fecha, picoPlaca)
 
-  // Sugerir como primeros contactos los interesados en el vehículo elegido
   const interesados = new Set()
   if (form.vehiculoId) {
     leads.forEach(l => { if (l.vehiculoId === form.vehiculoId) interesados.add(l.id) })
