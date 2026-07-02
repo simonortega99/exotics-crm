@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
-import { fmtDate, today, picoPlacaRestringido, DIAS_LV, ASESORES } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, Kebab } from '../components/ui.jsx'
+import { fmtDate, today, picoPlacaRestringido, weekdayOf, DIAS_LV, ASESORES } from '../lib/utils.js'
+import { Topbar, Page, Field, Modal, ModalButtons, Badge, Kebab } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
 import { crearCita } from '../lib/citas.js'
@@ -25,10 +25,13 @@ export default function Citas() {
   const asesores = data.asesores || ASESORES
   const ownerOptions = isAdmin ? asesores : [user.nombre]
 
+  const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
   const todas = (data.citas || []).filter(c => isAdmin || c.owner === user.nombre)
   const events = todas.map(c => ({ id: c.id, date: c.fecha, label: `${c.hora ? c.hora + ' ' : ''}${c.cliente || c.vehiculo || 'Cita'}`, tone: c.done ? 'done' : (picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca) ? 'red' : 'cyan') }))
-  const delDia = todas.filter(c => c.fecha === selDay).sort((a, b) => ((a.hora || '') > (b.hora || '') ? 1 : -1))
-  const ppDia = delDia.filter(c => picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)).length
+  const proximas = todas.filter(c => !c.done && c.fecha >= today()).sort((a, b) => (a.fecha + (a.hora || '') > b.fecha + (b.hora || '') ? 1 : -1))
+  const wd = weekdayOf(selDay)
+  const diaNombre = DIAS[wd] || ''
+  const ppDigs = (wd >= 1 && wd <= 5) ? (picoPlaca[wd] || []) : []
 
   function openForm(date) { setEditing(null); setShowForm(true); setSelDay(date || selDay) }
 
@@ -67,28 +70,33 @@ export default function Citas() {
         <button className="btn cyan" onClick={() => openForm(selDay)}>+ Nueva cita</button>
       </Topbar>
       <Page>
-        <div className="kpi-grid mb-16" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 260px))' }}>
-          <Kpi label={`Citas · ${fmtDate(selDay)}`} value={delDia.length} accent="cyan" />
-          <Kpi label="Con pico y placa ese día" value={ppDia} accent="amber" valueClass={ppDia ? 'red' : ''} />
+        <div className="card mb-16">
+          <div className="row gap-12 wrap" style={{ alignItems: 'center' }}>
+            <span className="card-title">Pico y placa · {diaNombre} {fmtDate(selDay)}</span>
+            {(wd >= 1 && wd <= 5)
+              ? (ppDigs.length
+                  ? <div className="row gap-6">{ppDigs.map(d => <span key={d} className="badge red" style={{ minWidth: 26, justifyContent: 'center', fontSize: 13 }}>{d}</span>)}</div>
+                  : <span className="text-2" style={{ fontSize: 13 }}>Sin dígitos restringidos este día</span>)
+              : <span className="text-2" style={{ fontSize: 13 }}>Fin de semana · sin pico y placa</span>}
+            <span className="text-3" style={{ fontSize: 11, marginLeft: 'auto' }}>Selecciona un día en el calendario. Híbridos y eléctricos exentos.</span>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
           <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} /></div>
           <div className="card" style={{ alignSelf: 'start' }}>
             <div className="row between mb-12">
-              <span className="section-title" style={{ fontSize: 14 }}>{fmtDate(selDay)}</span>
+              <span className="section-title" style={{ fontSize: 14 }}>Próximas citas</span>
               <button className="btn cyan sm" onClick={() => openForm(selDay)}>+ Cita</button>
             </div>
-            {delDia.map(c => {
+            {proximas.map(c => {
               const pp = picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)
               return (
                 <div key={c.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
                   <div className="row between gap-8">
-                    <label className="row gap-8" style={{ flex: 1, cursor: 'pointer' }}>
+                    <label className="row gap-8" style={{ flex: 1, cursor: 'pointer', minWidth: 0 }}>
                       <input type="checkbox" checked={!!c.done} onChange={() => toggle(c)} />
-                      <span className="cell-strong" style={{ fontSize: 12.5, textDecoration: c.done ? 'line-through' : 'none', color: c.done ? 'var(--text-3)' : 'var(--text)' }}>
-                        {c.hora ? c.hora + ' · ' : ''}{c.cliente || '—'}
-                      </span>
+                      <span className="cell-strong" style={{ fontSize: 12.5 }}>{c.cliente || '—'}</span>
                     </label>
                     <Kebab items={[
                       { label: 'Editar', onClick: () => { setEditing(c); setShowForm(true) } },
@@ -96,12 +104,12 @@ export default function Citas() {
                     ]} />
                   </div>
                   <div className="text-3" style={{ fontSize: 11.5, paddingLeft: 24 }}>
-                    {c.vehiculo || 'Vehículo'}{c.placa ? ` · ${c.placa}` : ''}{c.lugar ? ` · ${c.lugar}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}
+                    {fmtDate(c.fecha)}{c.hora ? ` · ${c.hora}` : ''} · {c.vehiculo || 'Vehículo'}{c.placa ? ` · ${c.placa}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}
                   </div>
                 </div>
               )
             })}
-            {!delDia.length && <div className="text-3" style={{ fontSize: 12.5, padding: '6px 0' }}>Sin citas este día.</div>}
+            {!proximas.length && <div className="text-3" style={{ fontSize: 12.5, padding: '6px 0' }}>Sin citas próximas.</div>}
           </div>
         </div>
         <div className="text-3 mt-8" style={{ fontSize: 11.5 }}>Los vehículos híbridos y eléctricos están exentos de pico y placa. Configura los días desde el botón "Pico y placa".</div>

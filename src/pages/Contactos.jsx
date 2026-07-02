@@ -66,8 +66,8 @@ export default function Contactos() {
     toast('Tarea agregada a la agenda')
   }
   function exportar() {
-    const headers = ['Nombre', 'Rol', 'Teléfono', 'Email', 'Temperatura', 'Vehículo de interés', 'Vehículo propiedad', 'En consignación', 'Cumpleaños', 'Asesor', 'Creado', 'Nota']
-    const rows = filtered.map(l => [l.nombre, l.rol, l.tel, l.email, l.thermo, l.vehiculoInteres, l.vehiculoPropio, l.vehiculoConsignado, l.cumple, l.owner, l.fechaCreacion, l.nota])
+    const headers = ['Nombre', 'Rol', 'Teléfono', 'Email', 'Instagram', 'Temperatura', 'Vehículo de interés', 'Vehículo propiedad', 'En consignación', 'Cumpleaños', 'Asesor', 'Creado', 'Nota']
+    const rows = filtered.map(l => [l.nombre, l.rol, l.tel, l.email, l.instagram, l.thermo, l.vehiculoInteres, l.vehiculoPropio, l.vehiculoConsignado, l.cumple, l.owner, l.fechaCreacion, l.nota])
     exportarHojaXls(`Contactos_${today()}.xls`, 'Contactos · Exotics Co.', headers, rows)
     toast('Contactos exportados')
   }
@@ -144,7 +144,7 @@ export default function Contactos() {
             <div style={{ padding: '14px 18px', background: 'var(--ink)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>{lead.nombre}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{lead.tel} {lead.email ? '· ' + lead.email : ''}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{[lead.tel, lead.email, lead.instagram].filter(Boolean).join(' · ')}</div>
               </div>
               <div className="row gap-8">
                 <button className="btn cyan sm" onClick={crearOportunidad}>+ Oportunidad</button>
@@ -182,6 +182,9 @@ export default function Contactos() {
                       onChange={({ vehiculoId, vehiculoInteres }) => updateItem('leads', lead.id, { vehiculoConsignadoId: vehiculoId, vehiculoConsignado: vehiculoInteres })} />
                   </Field>
                 )}
+                <Field label="Instagram">
+                  <input className="input" value={lead.instagram || ''} onChange={e => updateItem('leads', lead.id, { instagram: e.target.value })} placeholder="@usuario" />
+                </Field>
                 <Field label="Cumpleaños">
                   <input className="input" type="date" value={lead.cumple || ''} onChange={e => updateItem('leads', lead.id, { cumple: e.target.value })} />
                 </Field>
@@ -221,7 +224,7 @@ export default function Contactos() {
 }
 
 function LeadForm({ inventario, asesores, onSave, onClose }) {
-  const [form, setForm] = useState({ nombre: '', tel: '', email: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoId: '', vehiculoInteres: '', vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '' })
+  const [form, setForm] = useState({ nombre: '', tel: '', email: '', instagram: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoId: '', vehiculoInteres: '', vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '' })
   const set = (k, v) => setForm({ ...form, [k]: v })
   return (
     <Modal title="Nuevo contacto" onClose={onClose} width={440}
@@ -231,6 +234,7 @@ function LeadForm({ inventario, asesores, onSave, onClose }) {
         <Field label="Teléfono"><input className="input" value={form.tel} onChange={e => set('tel', e.target.value)} /></Field>
         <Field label="Email"><input className="input" value={form.email} onChange={e => set('email', e.target.value)} /></Field>
       </div>
+      <Field label="Instagram"><input className="input" value={form.instagram} onChange={e => set('instagram', e.target.value)} placeholder="@usuario" /></Field>
       <div className="form-grid cols-2">
         <Field label="Cumpleaños"><input className="input" type="date" value={form.cumple} onChange={e => set('cumple', e.target.value)} /></Field>
         <Field label="Owner">
