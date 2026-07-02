@@ -6,6 +6,7 @@ import { Topbar, Page, Field, Modal, ModalButtons, Badge, Kebab } from '../compo
 import Calendar from '../components/Calendar.jsx'
 import { toast, confirmDelete } from '../components/feedback.jsx'
 import { crearCita } from '../lib/citas.js'
+import { calActualizar, calEliminar } from '../lib/calendar.js'
 import { CalendarClock } from 'lucide-react'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
@@ -44,12 +45,14 @@ export default function Citas() {
       vehiculoId: f.vehiculoId, vehiculo: v ? vehName(v) : '', placa: v?.placa || '', motor: v?.motor || '',
       owner: f.owner || user.nombre, done: editing ? editing.done : false,
     }
+    const guests = [(data.equipo || []).find(e => e.nombre === cita.owner)?.email, data.leads.find(l => l.id === cita.clienteId)?.email]
     if (editing) {
       updateItem('citas', editing.id, cita)
       if (editing.actId) updateItem('actividades', editing.actId, { fecha: cita.fecha, titulo: `Cita: ${cita.cliente || cita.vehiculo || 'vehículo'}`, lead: cita.cliente, vehiculo: cita.vehiculo })
+      calActualizar({ ...editing, ...cita, calKey: editing.calKey }, editing.fecha, guests)
       toast('Cita actualizada')
     } else {
-      crearCita(addItem, updateItem, cita)
+      crearCita(addItem, updateItem, cita, guests)
       toast('Cita programada · visible en Actividades')
     }
     setShowForm(false); setEditing(null)
@@ -60,7 +63,7 @@ export default function Citas() {
     if (c.actId) updateItem('actividades', c.actId, { done: !c.done })
   }
   function eliminar(c) {
-    confirmDelete('la cita', () => { deleteItem('citas', c.id); if (c.actId) deleteItem('actividades', c.actId) })
+    confirmDelete('la cita', () => { deleteItem('citas', c.id); if (c.actId) deleteItem('actividades', c.actId); calEliminar(c) })
   }
 
   return (

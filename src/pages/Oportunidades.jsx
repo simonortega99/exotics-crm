@@ -169,7 +169,7 @@ export default function Oportunidades() {
         onSave={f => { addItem('actividades', { titulo: f.titulo, fecha: f.fecha, tipo: 'Seguimiento', owner: tareaOpp.owner || 'Simón', lead: tareaOpp.contacto, leadId: tareaOpp.contactoId, oppId: tareaOpp.id, vehiculo: tareaOpp.vehiculoInteres || '', done: false }); setTareaOpp(null); toast('Tarea agendada · visible en Actividades') }}
         onClose={() => setTareaOpp(null)} />}
       {citaOpp && <CitaQuickModal opp={citaOpp} inventario={data.inventario} picoPlaca={data.picoPlaca || {}}
-        onSave={c => { crearCita(addItem, updateItem, c); setCitaOpp(null); toast('Cita agendada · visible en Citas y Actividades') }}
+        onSave={c => { crearCita(addItem, updateItem, c, [(data.equipo || []).find(e => e.nombre === c.owner)?.email, data.leads.find(l => l.id === c.clienteId)?.email]); setCitaOpp(null); toast('Cita agendada · visible en Citas y Actividades') }}
         onClose={() => setCitaOpp(null)} />}
     </>
   )
