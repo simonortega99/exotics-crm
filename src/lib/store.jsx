@@ -5,27 +5,28 @@ import { supabase } from './supabaseClient.js'
 // ============================================================
 // STORE GLOBAL — Exotics Co. HQ
 //
-// Persiste en localStorage (cada navegador/persona tiene su
-// propia copia). Cuando migren a Supabase, esta es la única
-// pieza que hay que tocar: cambiar la carga/guardado para que
-// lean/escriban en la base de datos, sin tocar páginas.
+// Modelo POR FILAS (a prueba de choques entre usuarios):
+//   - Cada registro (contacto, oportunidad, vehículo, etc.) es una
+//     fila en la tabla `crm_items` (id, collection, data jsonb).
+//   - La configuración (equipo, metas, pico y placa…) va en una
+//     única fila `crm_state` id='settings'.
+//   Así, cuando Simón y Roberto trabajan a la vez, sus altas/ediciones
+//   son operaciones independientes y NO se sobreescriben.
+//
+// Si la tabla `crm_items` aún no existe, cae al modo anterior (un
+// solo bloque en crm_state id='main') para no romper nada.
+// Sin Supabase configurado, usa localStorage.
 // ============================================================
 
 const STORAGE_KEY = 'exotics_hq_data'
 
+const ARRAY_COLLECTIONS = ['leads', 'oportunidades', 'inventario', 'retomas', 'busquedas', 'ventas', 'actividades', 'fidelidad', 'contenidos', 'finanzas', 'citas']
+const SETTINGS_KEYS = ['asesores', 'equipo', 'fidelidadPlantillas', 'fidelidadTipos', 'meta', 'metaAnual', 'metaTipo', 'picoPlaca', 'redes', '_migratedOpps', '_unifiedActivities']
+
 const initialState = {
-  leads: [],          // directorio de contactos (personas)
-  oportunidades: [],  // deals abiertos del pipeline
-  inventario: [],
-  retomas: [],
-  busquedas: [],
-  ventas: [],
-  fidelidad: [],      // acciones de fidelización (log)
-  actividades: [],
-  citas: [],          // citas para mostrar vehículos
-  picoPlaca: { 1: [], 2: [], 3: [], 4: [], 5: [] }, // dígitos restringidos por día (1=Lun … 5=Vie)
-  contenidos: [],
-  finanzas: [],
+  leads: [], oportunidades: [], inventario: [], retomas: [], busquedas: [], ventas: [],
+  fidelidad: [], actividades: [], citas: [], contenidos: [], finanzas: [],
+  picoPlaca: { 1: [], 2: [], 3: [], 4: [], 5: [] },
   asesores: ['Simón', 'Roberto'],
   equipo: [
     { id: 'u1', nombre: 'Simón', usuario: 'simon', password: 'exotics', rol: 'admin' },
@@ -37,18 +38,14 @@ const initialState = {
     { id: 'p3', titulo: 'Felicitación de cumpleaños', base: 'cumple', meses: 0 },
   ],
   fidelidadTipos: ['Llamada de cortesía', 'Regalo / aniversario', 'Oferta exclusiva', 'Mantenimiento VIP', 'Encuesta de satisfacción', 'Referido', 'Otro'],
-  meta: 8,            // meta mensual de ventas
-  metaAnual: 96,      // meta anual de ventas
-  metaTipo: 'mensual', // (legado, ya no se usa)
+  meta: 8, metaAnual: 96, metaTipo: 'mensual',
   redes: { ig: {}, tt: {} },
   _migratedOpps: false,
 }
 
-// Migración suave: si aún no hay oportunidades, crea una por cada
-// lead activo conservando su etapa del funnel previo. Idempotente.
-function migrate(state) {
-  const s = { ...initialState, ...state }
-  // Equipo (credenciales) como fuente de los asesores
+// Rellena valores por defecto de configuración (idempotente, no toca registros).
+function withDefaults(d) {
+  const s = { ...initialState, ...d }
   if (!Array.isArray(s.equipo) || !s.equipo.length) s.equipo = initialState.equipo
   s.equipo = s.equipo.map(e => ({ ...e, rol: e.rol || (['Simón', 'Roberto'].includes(e.nombre) ? 'admin' : 'asesor') }))
   s.asesores = s.equipo.map(e => e.nombre)
@@ -56,165 +53,220 @@ function migrate(state) {
   if (s.metaAnual == null) s.metaAnual = (s.meta || 8) * 12
   if (!Array.isArray(s.fidelidadPlantillas)) s.fidelidadPlantillas = initialState.fidelidadPlantillas
   if (!Array.isArray(s.fidelidadTipos) || !s.fidelidadTipos.length) s.fidelidadTipos = initialState.fidelidadTipos
-  if (!Array.isArray(s.citas)) s.citas = []
   if (!s.picoPlaca || typeof s.picoPlaca !== 'object') s.picoPlaca = { 1: [], 2: [], 3: [], 4: [], 5: [] }
-  // El rol 'concesionario' se unifica con 'aliado'
+  ARRAY_COLLECTIONS.forEach(c => { if (!Array.isArray(s[c])) s[c] = [] })
+  return s
+}
+
+// Migración destructiva de una sola vez (para SEMBRAR desde el bloque antiguo).
+function migrate(state) {
+  const s = withDefaults({ ...state })
   ;(s.leads || []).forEach(l => { if (l.rol === 'concesionario') l.rol = 'aliado' })
   if (!s._migratedOpps) {
     if ((!s.oportunidades || !s.oportunidades.length) && (s.leads || []).length) {
       const activos = s.leads.filter(l => (l.rol || 'lead') === 'lead')
       s.oportunidades = activos.map(l => ({
-        id: uid(),
-        contactoId: l.id,
-        contacto: l.nombre,
-        vehiculoInteres: l.vehiculoInteres || '',
-        vehiculoId: l.vehiculoId || '',
-        valor: l.valor || '',
-        stage: Math.min(+l.stage || 0, OPP_STAGES.length - 1),
-        estado: 'Abierta',
-        owner: l.owner || 'Simón',
-        fecha: l.fecha || new Date().toISOString().split('T')[0],
+        id: uid(), contactoId: l.id, contacto: l.nombre, vehiculoInteres: l.vehiculoInteres || '',
+        vehiculoId: l.vehiculoId || '', valor: l.valor || '', stage: Math.min(+l.stage || 0, OPP_STAGES.length - 1),
+        estado: 'Abierta', owner: l.owner || 'Simón', fecha: l.fecha || new Date().toISOString().split('T')[0],
       }))
     }
     s._migratedOpps = true
   }
-
-  // Unificación de la agenda: las tareas de seguimiento de cada lead y las
-  // acciones de fidelización pasan a la colección única `actividades`, para
-  // que TODO aparezca en el módulo Actividades y su calendario.
   if (!s._unifiedActivities) {
     s.actividades = s.actividades || []
     ;(s.leads || []).forEach(l => {
-      ;(l.tasks || []).forEach(t => s.actividades.push({
-        id: uid(), titulo: t.title, fecha: t.date, tipo: 'Seguimiento',
-        owner: l.owner || 'Simón', lead: l.nombre, leadId: l.id, done: !!t.done,
-      }))
+      ;(l.tasks || []).forEach(t => s.actividades.push({ id: uid(), titulo: t.title, fecha: t.date, tipo: 'Seguimiento', owner: l.owner || 'Simón', lead: l.nombre, leadId: l.id, done: !!t.done }))
       delete l.tasks
     })
-    ;(s.fidelidad || []).forEach(f => s.actividades.push({
-      id: uid(), titulo: f.tipo + (f.nota ? ` · ${f.nota}` : ''), fecha: f.fecha,
-      tipo: 'Fidelización', owner: f.owner || '', lead: f.cliente, cliente: f.cliente, done: !!f.done,
-    }))
+    ;(s.fidelidad || []).forEach(f => s.actividades.push({ id: uid(), titulo: f.tipo + (f.nota ? ` · ${f.nota}` : ''), fecha: f.fecha, tipo: 'Fidelización', owner: f.owner || '', lead: f.cliente, cliente: f.cliente, done: !!f.done }))
     s.fidelidad = []
     s._unifiedActivities = true
   }
   return s
 }
 
+const readLocal = () => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {} } catch { return {} } }
+
 const StoreContext = createContext(null)
-const CLIENT_ID = uid()   // identifica esta pestaña para ignorar sus propios echos
-const ROW_ID = 'main'     // un solo registro JSON con todo el estado
+const CLIENT_ID = uid()
 
 export function StoreProvider({ children }) {
   const [data, setData] = useState(initialState)
   const [loaded, setLoaded] = useState(false)
   const skipSave = useRef(false)
-  const signedIn = useRef(!supabase) // sin supabase, siempre "activo" (modo local)
+  const signedIn = useRef(!supabase)
+  const mode = useRef(supabase ? 'perrow' : 'local') // perrow | blob | local
   const channelRef = useRef(null)
+  const dataRef = useRef(data)
+  useEffect(() => { dataRef.current = data }, [data])
 
+  // ---------- helpers de persistencia por fila ----------
+  const nowISO = () => new Date().toISOString()
+  function pushItem(collection, item) {
+    if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
+    supabase.from('crm_items').upsert({ id: item.id, collection, data: item, updated_at: nowISO() })
+      .then(({ error }) => { if (error) console.error('upsert item', error) })
+  }
+  function removeRow(id) {
+    if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
+    supabase.from('crm_items').delete().eq('id', id).then(({ error }) => { if (error) console.error('delete item', error) })
+  }
+  function saveSettings(next) {
+    if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
+    const settings = {}; SETTINGS_KEYS.forEach(k => { settings[k] = next[k] })
+    supabase.from('crm_state').upsert({ id: 'settings', data: settings, updated_at: nowISO() })
+      .then(({ error }) => { if (error) console.error('save settings', error) })
+  }
+
+  // ---------- realtime ----------
   function setupRealtime() {
-    if (!supabase) return
-    if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
-    channelRef.current = supabase.channel('crm_state_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_state', filter: `id=eq.${ROW_ID}` }, payload => {
-        const d = payload.new && payload.new.data
-        if (d && d._writer !== CLIENT_ID) { skipSave.current = true; setData(migrate(d)) }
+    if (!supabase || channelRef.current) return
+    channelRef.current = supabase.channel('crm_rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_items' }, payload => {
+        if (payload.eventType === 'DELETE') {
+          const id = payload.old && payload.old.id
+          if (!id) return
+          setData(prev => {
+            const n = { ...prev }
+            for (const c of ARRAY_COLLECTIONS) if (n[c] && n[c].some(x => x.id === id)) n[c] = n[c].filter(x => x.id !== id)
+            return n
+          })
+        } else {
+          const r = payload.new
+          if (!r || !r.collection) return
+          setData(prev => {
+            const arr = prev[r.collection] || []
+            const exists = arr.some(x => x.id === r.id)
+            return { ...prev, [r.collection]: exists ? arr.map(x => x.id === r.id ? r.data : x) : [r.data, ...arr] }
+          })
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_state', filter: 'id=eq.settings' }, payload => {
+        const s = payload.new && payload.new.data
+        if (s) setData(prev => withDefaults({ ...prev, ...s }))
       })
       .subscribe()
   }
 
-  async function loadRemote() {
-    try {
-      const { data: row, error } = await supabase.from('crm_state').select('data').eq('id', ROW_ID).maybeSingle()
-      if (error) throw error
-      if (row && row.data) {
-        skipSave.current = true
-        setData(migrate(row.data))
-      } else {
-        let local = {}
-        try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) local = JSON.parse(raw) } catch { /* noop */ }
-        const seeded = migrate(local)
-        setData(seeded)
-        await supabase.from('crm_state').upsert({ id: ROW_ID, data: { ...seeded, _writer: CLIENT_ID }, updated_at: new Date().toISOString() })
-      }
-      setupRealtime()
-    } catch (e) {
-      console.error('Error cargando de Supabase:', e)
+  function clearChannel() { if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null } }
+
+  // ---------- siembra desde el bloque antiguo ----------
+  async function seedPerRow() {
+    let base = null
+    try { const { data: row } = await supabase.from('crm_state').select('data').eq('id', 'main').maybeSingle(); base = row && row.data } catch { /* noop */ }
+    if (!base) base = readLocal()
+    const blob = migrate(base || {})
+    const rows = []
+    ARRAY_COLLECTIONS.forEach(c => (blob[c] || []).forEach(it => { if (it && it.id) rows.push({ id: it.id, collection: c, data: it }) }))
+    for (let i = 0; i < rows.length; i += 400) {
+      try { await supabase.from('crm_items').upsert(rows.slice(i, i + 400)) } catch (e) { console.error('seed items', e) }
+    }
+    const settings = {}; SETTINGS_KEYS.forEach(k => { if (blob[k] !== undefined) settings[k] = blob[k] })
+    try { await supabase.from('crm_state').upsert({ id: 'settings', data: settings, updated_at: nowISO() }) } catch (e) { console.error('seed settings', e) }
+  }
+
+  async function loadPerRow() {
+    const { data: items, error } = await supabase.from('crm_items').select('id, collection, data')
+    if (error) throw error // probablemente la tabla no existe → cae a modo blob
+    const { data: srow } = await supabase.from('crm_state').select('data').eq('id', 'settings').maybeSingle()
+    if ((!items || items.length === 0) && !srow) {
+      await seedPerRow()
+      const again = await supabase.from('crm_items').select('id, collection, data')
+      const s2 = await supabase.from('crm_state').select('data').eq('id', 'settings').maybeSingle()
+      build(again.data || [], (s2.data && s2.data.data) || {})
+    } else {
+      build(items || [], (srow && srow.data) || {})
+    }
+    mode.current = 'perrow'
+    setupRealtime()
+  }
+  function build(items, settings) {
+    const d = {}; ARRAY_COLLECTIONS.forEach(c => d[c] = [])
+    items.forEach(r => { if (r && r.collection) (d[r.collection] = d[r.collection] || []).push(r.data) })
+    skipSave.current = true
+    setData(withDefaults({ ...d, ...settings }))
+  }
+
+  // ---------- modo blob (fallback si crm_items no existe) ----------
+  async function loadBlob() {
+    mode.current = 'blob'
+    const { data: row } = await supabase.from('crm_state').select('data').eq('id', 'main').maybeSingle()
+    if (row && row.data) { skipSave.current = true; setData(migrate(row.data)) }
+    else { const seeded = migrate(readLocal()); setData(seeded); try { await supabase.from('crm_state').upsert({ id: 'main', data: { ...seeded, _writer: CLIENT_ID }, updated_at: nowISO() }) } catch { /* noop */ } }
+    if (!channelRef.current) {
+      channelRef.current = supabase.channel('crm_blob')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'crm_state', filter: 'id=eq.main' }, payload => {
+          const d = payload.new && payload.new.data
+          if (d && d._writer !== CLIENT_ID) { skipSave.current = true; setData(migrate(d)) }
+        }).subscribe()
     }
   }
 
-  // Carga inicial
+  async function loadRemote() {
+    try { await loadPerRow() }
+    catch (e) { console.warn('crm_items no disponible, uso modo bloque:', e && e.message); try { await loadBlob() } catch (e2) { console.error(e2); setData(migrate(readLocal())) } }
+  }
+
+  // ---------- carga inicial ----------
   useEffect(() => {
     let cancelled = false
+    if (!supabase) { setData(migrate(readLocal())); setLoaded(true); return }
 
-    if (!supabase) {
-      // Modo local (sin Supabase configurado)
-      let local = {}
-      try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) local = JSON.parse(raw) } catch { /* noop */ }
-      setData(migrate(local)); setLoaded(true)
-      return
-    }
-
-    // Modo Supabase: los datos solo se cargan con sesión iniciada (RLS)
     supabase.auth.getSession().then(async ({ data: s }) => {
       if (cancelled) return
       if (s.session) { signedIn.current = true; await loadRemote() }
-      else { setData(migrate({})) }
+      else { setData(withDefaults({})) }
       setLoaded(true)
     })
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
-      if (event === 'SIGNED_IN' && s) { signedIn.current = true; skipSave.current = true; await loadRemote() }
-      if (event === 'SIGNED_OUT') {
-        signedIn.current = false
-        if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
-        skipSave.current = true; setData(migrate({}))
-      }
+      if (event === 'SIGNED_IN' && s) { signedIn.current = true; await loadRemote() }
+      if (event === 'SIGNED_OUT') { signedIn.current = false; clearChannel(); setData(withDefaults({})) }
     })
-    return () => { cancelled = true; sub.subscription.unsubscribe(); if (channelRef.current) supabase.removeChannel(channelRef.current) }
+    return () => { cancelled = true; sub.subscription.unsubscribe(); clearChannel() }
   }, [])
 
-  // Guardado (debounced): Supabase + copia local de respaldo
+  // ---------- respaldo local + guardado en modo blob ----------
   useEffect(() => {
     if (!loaded) return
     if (skipSave.current) { skipSave.current = false; return }
-    if (supabase && !signedIn.current) return // sin sesión no guardamos (evita pisar el respaldo local)
+    if (supabase && !signedIn.current) return
     const t = setTimeout(async () => {
-      if (supabase) {
-        try {
-          await supabase.from('crm_state').upsert({ id: ROW_ID, data: { ...data, _writer: CLIENT_ID }, updated_at: new Date().toISOString() })
-        } catch (e) { console.error('Error guardando en Supabase:', e) }
-      }
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)) } catch { /* noop */ }
+      if (mode.current === 'blob' && supabase && signedIn.current) {
+        try { await supabase.from('crm_state').upsert({ id: 'main', data: { ...data, _writer: CLIENT_ID }, updated_at: nowISO() }) } catch (e) { console.error(e) }
+      }
     }, 400)
     return () => clearTimeout(t)
   }, [data, loaded])
 
+  // ---------- API pública (igual que antes) ----------
   const addItem = useCallback((collection, item) => {
     const created = { id: uid(), ...item }
-    setData(prev => ({ ...prev, [collection]: [created, ...prev[collection]] }))
+    setData(prev => ({ ...prev, [collection]: [created, ...(prev[collection] || [])] }))
+    pushItem(collection, created)
     return created
   }, [])
 
   const updateItem = useCallback((collection, id, updates) => {
-    setData(prev => ({
-      ...prev,
-      [collection]: prev[collection].map(x => x.id === id ? { ...x, ...updates } : x),
-    }))
+    const cur = (dataRef.current[collection] || []).find(x => x.id === id)
+    const merged = cur ? { ...cur, ...updates } : null
+    setData(prev => ({ ...prev, [collection]: (prev[collection] || []).map(x => x.id === id ? { ...x, ...updates } : x) }))
+    if (merged) pushItem(collection, merged)
   }, [])
 
   const deleteItem = useCallback((collection, id) => {
-    setData(prev => ({
-      ...prev,
-      [collection]: prev[collection].filter(x => x.id !== id),
-    }))
+    setData(prev => ({ ...prev, [collection]: (prev[collection] || []).filter(x => x.id !== id) }))
+    removeRow(id)
   }, [])
 
   const setField = useCallback((field, value) => {
+    const next = { ...dataRef.current, [field]: value }
     setData(prev => ({ ...prev, [field]: value }))
+    if (SETTINGS_KEYS.includes(field)) saveSettings(next)
   }, [])
 
   const value = { data, setData, addItem, updateItem, deleteItem, setField, loaded }
-
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 
