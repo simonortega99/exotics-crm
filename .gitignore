@@ -1,14 +1,13 @@
 node_modules
 dist
+
+# Entorno (claves privadas)
 .env
 .env.local
+
+# Basura de macOS
 .DS_Store
 Icon?
 
-# Vite temp
-vite.config.js.timestamp-*
+# Temporales de Vite
 *.timestamp-*.mjs
-
-vite.config.js.timestamp-*
-
-vite.config.js.timestamp-*

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { uid, OPP_STAGES } from './utils.js'
 import { supabase } from './supabaseClient.js'
+import { toast } from '../components/feedback.jsx'
 
 // ============================================================
 // STORE GLOBAL — Exotics Co. HQ
@@ -100,23 +101,58 @@ export function StoreProvider({ children }) {
   const channelRef = useRef(null)
   const dataRef = useRef(data)
   useEffect(() => { dataRef.current = data }, [data])
+  const pending = useRef(0)          // escrituras en vuelo (protege la reconciliación)
+  const warnedOffline = useRef(false) // evita repetir el aviso de error
 
   // ---------- helpers de persistencia por fila ----------
   const nowISO = () => new Date().toISOString()
+
+  // Ejecuta una escritura en Supabase con reintentos y backoff. Si tras
+  // varios intentos sigue fallando, avisa al usuario (para que no crea que
+  // guardó cuando en realidad el dato no llegó a la nube).
+  async function withRetry(makeQuery, label, tries = 4) {
+    pending.current++
+    try {
+      for (let i = 0; i < tries; i++) {
+        try {
+          const { error } = await makeQuery()
+          if (!error) { warnedOffline.current = false; return true }
+          if (i === tries - 1) throw error
+        } catch (e) {
+          if (i === tries - 1) {
+            console.error(label, e)
+            if (!warnedOffline.current) {
+              warnedOffline.current = true
+              toast('No se pudo guardar en la nube. Revisa tu conexión: el cambio podría perderse al recargar.', 'error')
+            }
+            return false
+          }
+        }
+        await new Promise(r => setTimeout(r, 500 * (i + 1)))
+      }
+    } finally {
+      pending.current--
+    }
+    return false
+  }
+
   function pushItem(collection, item) {
     if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
-    supabase.from('crm_items').upsert({ id: item.id, collection, data: item, updated_at: nowISO() })
-      .then(({ error }) => { if (error) console.error('upsert item', error) })
+    // En cada intento envía la versión MÁS reciente del registro (evita que un
+    // reintento pise una edición posterior con datos viejos).
+    withRetry(() => {
+      const latest = (dataRef.current[collection] || []).find(x => x.id === item.id) || item
+      return supabase.from('crm_items').upsert({ id: item.id, collection, data: latest, updated_at: nowISO() })
+    }, 'upsert item')
   }
   function removeRow(id) {
     if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
-    supabase.from('crm_items').delete().eq('id', id).then(({ error }) => { if (error) console.error('delete item', error) })
+    withRetry(() => supabase.from('crm_items').delete().eq('id', id), 'delete item')
   }
   function saveSettings(next) {
     if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
     const settings = {}; SETTINGS_KEYS.forEach(k => { settings[k] = next[k] })
-    supabase.from('crm_state').upsert({ id: 'settings', data: settings, updated_at: nowISO() })
-      .then(({ error }) => { if (error) console.error('save settings', error) })
+    withRetry(() => supabase.from('crm_state').upsert({ id: 'settings', data: settings, updated_at: nowISO() }), 'save settings')
   }
 
   // ---------- realtime ----------
@@ -146,8 +182,13 @@ export function StoreProvider({ children }) {
         const s = payload.new && payload.new.data
         if (s) setData(prev => withDefaults({ ...prev, ...s }))
       })
-      .subscribe()
+      .subscribe(status => {
+        // Al re-suscribirse tras una caída, ponerse al día por si se perdieron eventos.
+        if (status === 'SUBSCRIBED' && subscribedOnce.current) reconcile()
+        if (status === 'SUBSCRIBED') subscribedOnce.current = true
+      })
   }
+  const subscribedOnce = useRef(false)
 
   function clearChannel() { if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null } }
 
@@ -208,6 +249,30 @@ export function StoreProvider({ children }) {
     catch (e) { console.warn('crm_items no disponible, uso modo bloque:', e && e.message); try { await loadBlob() } catch (e2) { console.error(e2); setData(migrate(readLocal())) } }
   }
 
+  // Vuelve a leer la base y se pone al día. Se dispara al reconectar / volver a
+  // la pestaña, por si Realtime perdió algún evento. NO corre si hay escrituras
+  // pendientes, para no pisar un cambio local aún sin confirmar en la nube.
+  const reconciling = useRef(false)
+  async function reconcile() {
+    if (!supabase || !signedIn.current || pending.current > 0 || reconciling.current) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    reconciling.current = true
+    try {
+      if (mode.current === 'perrow') {
+        const { data: items, error } = await supabase.from('crm_items').select('id, collection, data')
+        if (error) return
+        const { data: srow } = await supabase.from('crm_state').select('data').eq('id', 'settings').maybeSingle()
+        if (pending.current > 0) return // llegó una escritura mientras leíamos
+        build(items || [], (srow && srow.data) || {})
+      } else if (mode.current === 'blob') {
+        const { data: row } = await supabase.from('crm_state').select('data').eq('id', 'main').maybeSingle()
+        if (pending.current > 0) return
+        if (row && row.data) { skipSave.current = true; setData(migrate(row.data)) }
+      }
+    } catch (e) { console.warn('reconcile', e && e.message) }
+    finally { reconciling.current = false }
+  }
+
   // ---------- carga inicial ----------
   useEffect(() => {
     let cancelled = false
@@ -223,7 +288,24 @@ export function StoreProvider({ children }) {
       if (event === 'SIGNED_IN' && s) { signedIn.current = true; await loadRemote() }
       if (event === 'SIGNED_OUT') { signedIn.current = false; clearChannel(); setData(withDefaults({})) }
     })
-    return () => { cancelled = true; sub.subscription.unsubscribe(); clearChannel() }
+
+    // Ponerse al día cuando el navegador vuelve al primer plano o recupera red,
+    // por si Realtime perdió algún evento mientras tanto.
+    const onFocus = () => reconcile()
+    const onOnline = () => reconcile()
+    const onVisible = () => { if (document.visibilityState === 'visible') reconcile() }
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+      clearChannel()
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   // ---------- respaldo local + guardado en modo blob ----------
