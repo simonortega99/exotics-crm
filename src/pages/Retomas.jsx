@@ -2,7 +2,7 @@ import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtMoneyShort, fmtDate, today, num } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
 function inversionTotal(r) {
@@ -17,7 +17,7 @@ function rentabilidad(r) {
 }
 
 export default function Retomas() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [openId, setOpenId] = useState(null)
@@ -71,7 +71,7 @@ export default function Retomas() {
                       <td onClick={e => e.stopPropagation()}>
                         <Kebab items={[
                           { label: 'Editar', onClick: () => setEditing(r) },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete(`la retoma ${r.marca} ${r.modelo}`, () => deleteItem('retomas', r.id)) },
+                          { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('retomas', r, `La retoma ${r.marca} ${r.modelo}`) },
                         ]} />
                       </td>
                     </tr>

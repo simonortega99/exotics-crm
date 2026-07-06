@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtDate, today, num } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 
 const ESTADO_TONE = { Buscando: 'cyan', 'En pausa': 'gray', Encontrado: 'green' }
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
 
 export default function Busquedas() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
 
@@ -78,7 +78,7 @@ export default function Busquedas() {
                         {match && <button className="btn cyan sm" onClick={() => crearOpp(b, match)} title="Crear oportunidad con este vehículo">+ Oportunidad</button>}
                         <Kebab items={[
                           { label: 'Editar', onClick: () => setEditing(b) },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete(`la búsqueda de ${nombreDe(b)}`, () => deleteItem('busquedas', b.id)) },
+                          { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('busquedas', b, `La búsqueda de ${nombreDe(b)}`) },
                         ]} />
                       </div>
                     </td>

@@ -4,20 +4,22 @@ import { useAuth } from '../lib/auth.jsx'
 import { fmtDate, today, picoPlacaRestringido, weekdayOf, DIAS_LV, ASESORES } from '../lib/utils.js'
 import { Topbar, Page, Field, Modal, ModalButtons, Badge, Kebab } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { crearCita } from '../lib/citas.js'
 import { calActualizar, calEliminar } from '../lib/calendar.js'
 import { CalendarClock } from 'lucide-react'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
+const DIAS_SEM = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
 export default function Citas() {
-  const { data, addItem, updateItem, deleteItem, setField } = useStore()
+  const { data, addItem, updateItem, deleteItem, restoreItem, setField } = useStore()
   const { user, isAdmin } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [showConfig, setShowConfig] = useState(false)
   const [selDay, setSelDay] = useState(today())
+  const [dayModal, setDayModal] = useState(null) // fecha del día abierto en detalle
 
   const picoPlaca = data.picoPlaca || {}
   const invActivo = data.inventario.filter(v => v.estado !== 'Vendido')
@@ -26,12 +28,11 @@ export default function Citas() {
   const asesores = data.asesores || ASESORES
   const ownerOptions = isAdmin ? asesores : [user.nombre]
 
-  const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
   const todas = (data.citas || []).filter(c => isAdmin || c.owner === user.nombre)
   const events = todas.map(c => ({ id: c.id, date: c.fecha, label: `${c.hora ? c.hora + ' ' : ''}${c.cliente || c.vehiculo || 'Cita'}`, tone: c.done ? 'done' : (picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca) ? 'red' : 'cyan') }))
   const proximas = todas.filter(c => !c.done && c.fecha >= today()).sort((a, b) => (a.fecha + (a.hora || '') > b.fecha + (b.hora || '') ? 1 : -1))
   const wd = weekdayOf(selDay)
-  const diaNombre = DIAS[wd] || ''
+  const diaNombre = DIAS_SEM[wd] || ''
   const ppDigs = (wd >= 1 && wd <= 5) ? (picoPlaca[wd] || []) : []
 
   function openForm(date) { setEditing(null); setShowForm(true); setSelDay(date || selDay) }
@@ -63,7 +64,11 @@ export default function Citas() {
     if (c.actId) updateItem('actividades', c.actId, { done: !c.done })
   }
   function eliminar(c) {
-    confirmDelete('la cita', () => { deleteItem('citas', c.id); if (c.actId) deleteItem('actividades', c.actId); calEliminar(c) })
+    const act = c.actId ? (data.actividades || []).find(a => a.id === c.actId) : null
+    deleteItem('citas', c.id)
+    if (c.actId) deleteItem('actividades', c.actId)
+    calEliminar(c)
+    toast('Cita eliminada', 'info', { label: 'Deshacer', fn: () => { restoreItem('citas', c); if (act) restoreItem('actividades', act) } })
   }
 
   return (
@@ -86,7 +91,10 @@ export default function Citas() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
-          <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} /></div>
+          <div className="card">
+            <Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} onDayDoubleClick={d => { setSelDay(d); setDayModal(d) }} />
+            <div className="text-3 mt-8" style={{ fontSize: 11 }}>Doble clic en un día para ver y gestionar sus citas.</div>
+          </div>
           <div className="card" style={{ alignSelf: 'start' }}>
             <div className="row between mb-12">
               <span className="section-title" style={{ fontSize: 14 }}>Próximas citas</span>
@@ -118,10 +126,56 @@ export default function Citas() {
         <div className="text-3 mt-8" style={{ fontSize: 11.5 }}>Los vehículos híbridos y eléctricos están exentos de pico y placa. Configura los días desde el botón "Pico y placa".</div>
       </Page>
 
+      {dayModal && (
+        <DayModal
+          fecha={dayModal}
+          citas={todas.filter(c => c.fecha === dayModal).sort((a, b) => ((a.hora || '') > (b.hora || '') ? 1 : -1))}
+          picoPlaca={picoPlaca}
+          onToggle={toggle}
+          onEdit={c => { setDayModal(null); setEditing(c); setShowForm(true) }}
+          onEliminar={eliminar}
+          onNueva={() => { setDayModal(null); openForm(dayModal) }}
+          onClose={() => setDayModal(null)}
+        />
+      )}
       {showForm && <CitaForm initial={editing} presetFecha={selDay} leads={leads} oportunidades={oportunidades} inventario={invActivo} asesores={ownerOptions} picoPlaca={picoPlaca}
         onSave={guardar} onClose={() => { setShowForm(false); setEditing(null) }} />}
       {showConfig && <PicoPlacaModal picoPlaca={picoPlaca} onSave={pp => { setField('picoPlaca', pp); toast('Pico y placa actualizado') }} onClose={() => setShowConfig(false)} />}
     </>
+  )
+}
+
+// Detalle de un día: lista las citas de esa fecha con completar / editar / eliminar.
+function DayModal({ fecha, citas, picoPlaca, onToggle, onEdit, onEliminar, onNueva, onClose }) {
+  const wd = weekdayOf(fecha)
+  return (
+    <Modal title={`Citas · ${DIAS_SEM[wd] || ''} ${fmtDate(fecha)}`} onClose={onClose} width={480}
+      footer={<><button className="btn" onClick={onClose}>Cerrar</button><button className="btn cyan" onClick={onNueva}>+ Nueva cita</button></>}>
+      {!citas.length && <div className="text-3" style={{ fontSize: 13, padding: '8px 0' }}>No hay citas este día. Usa "+ Nueva cita" para agendar una.</div>}
+      {citas.map((c, i) => {
+        const pp = picoPlacaRestringido(c.placa, c.motor, c.fecha, picoPlaca)
+        return (
+          <div key={c.id} className="row between gap-8" style={{ padding: '10px 0', borderBottom: i < citas.length - 1 ? '1px solid var(--line)' : 'none' }}>
+            <label className="row gap-8" style={{ flex: 1, cursor: 'pointer', minWidth: 0, alignItems: 'flex-start' }}>
+              <input type="checkbox" checked={!!c.done} onChange={() => onToggle(c)} style={{ marginTop: 3 }} />
+              <div style={{ minWidth: 0 }}>
+                <div className="cell-strong" style={{ fontSize: 13, textDecoration: c.done ? 'line-through' : 'none', opacity: c.done ? .6 : 1 }}>
+                  {c.hora ? `${c.hora} · ` : ''}{c.cliente || 'Sin cliente'}
+                </div>
+                <div className="text-3" style={{ fontSize: 11.5 }}>
+                  {c.vehiculo || 'Vehículo'}{c.placa ? ` · ${c.placa}` : ''}{c.lugar ? ` · ${c.lugar}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}
+                </div>
+                {c.nota && <div className="text-3" style={{ fontSize: 11 }}>{c.nota}</div>}
+              </div>
+            </label>
+            <Kebab items={[
+              { label: 'Editar', onClick: () => onEdit(c) },
+              { label: 'Eliminar', danger: true, onClick: () => onEliminar(c) },
+            ]} />
+          </div>
+        )
+      })}
+    </Modal>
   )
 }
 

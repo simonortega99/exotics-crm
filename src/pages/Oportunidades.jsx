@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { crearCita } from '../lib/citas.js'
 
@@ -18,7 +18,7 @@ const FILTROS = [
 ]
 
 export default function Oportunidades() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [tareaOpp, setTareaOpp] = useState(null)
@@ -148,7 +148,7 @@ export default function Oportunidades() {
                           o.estado === 'Abierta' && { label: 'Editar', onClick: () => setEditing(o) },
                           o.estado === 'Abierta' && { label: 'Marcar ganada', onClick: () => ganar(o) },
                           o.estado !== 'Abierta' && { label: 'Reabrir', onClick: () => { updateItem('oportunidades', o.id, { estado: 'Abierta' }); toast('Oportunidad reabierta') } },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete('la oportunidad', () => deleteItem('oportunidades', o.id)) },
+                          { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('oportunidades', o, 'La oportunidad') },
                         ]} />
                       </div>
                     </td>

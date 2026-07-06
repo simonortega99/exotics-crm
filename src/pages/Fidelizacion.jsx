@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtMoneyShort, fmtDate, today, addDays, num, isOverdue, loyaltyTier, TIERS, cumpleInfo, uid } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { Zap } from 'lucide-react'
 
@@ -11,7 +11,7 @@ const TIPOS_ACCION = ['Llamada de cortesía', 'Regalo / aniversario', 'Oferta ex
 // (tipo 'Fidelización') para que aparezcan también en el módulo Actividades.
 
 export default function Fidelizacion() {
-  const { data, addItem, updateItem, deleteItem, setField } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo, setField } = useStore()
   const tipos = (data.fidelidadTipos && data.fidelidadTipos.length) ? data.fidelidadTipos : TIPOS_ACCION
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -143,7 +143,7 @@ export default function Fidelizacion() {
                   <div style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
                     {a.titulo} <span className="text-3">· {fmtDate(a.fecha)}</span>
                   </div>
-                  <button className="btn danger sm" onClick={() => confirmDelete('la acción', () => deleteItem('actividades', a.id))}>×</button>
+                  <button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La acción')}>×</button>
                 </div>
               ))}
               {!accionesCli.length && <div className="text-3" style={{ fontSize: 12, padding: '4px 0 10px' }}>Sin acciones registradas.</div>}
@@ -185,7 +185,7 @@ export default function Fidelizacion() {
                       <td className="num">{fmtDate(a.fecha)} {venc && <Badge tone="red">vencida</Badge>}</td>
                       <td className="cell-strong">{a.cliente || a.lead}</td>
                       <td style={a.done ? { textDecoration: 'line-through', color: 'var(--text-3)' } : undefined}>{a.titulo}</td>
-                      <td><button className="btn danger sm" onClick={() => confirmDelete('la acción', () => deleteItem('actividades', a.id))}>Eliminar</button></td>
+                      <td><button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La acción')}>Eliminar</button></td>
                     </tr>
                   )
                 })}

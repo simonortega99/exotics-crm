@@ -3,14 +3,14 @@ import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, CUENTAS_REDES } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 
 const ESTADO_TONE = { Idea: 'gray', 'En producción': 'amber', Publicado: 'green' }
 const CAL_TONE = { Idea: 'violet', 'En producción': 'amber', Publicado: 'green' }
 const TIPOS = ['Reel', 'Carrusel', 'Story', 'Post', 'Video']
 
 export default function Contenidos() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [vista, setVista] = useState('lista')
   const [selDay, setSelDay] = useState(today())
@@ -56,7 +56,7 @@ export default function Contenidos() {
                 <div key={p.id} style={{ padding: '9px 0', borderBottom: '1px solid var(--line)' }}>
                   <div className="row between">
                     <span className="cell-strong" style={{ fontSize: 12.5 }}>{p.titulo}</span>
-                    <button className="btn danger sm" onClick={() => confirmDelete('el post', () => deleteItem('contenidos', p.id))}>×</button>
+                    <button className="btn danger sm" onClick={() => deleteItemUndo('contenidos', p, 'El post')}>×</button>
                   </div>
                   <div className="row gap-6 mt-8">
                     <Badge tone="ink">{p.tipo}</Badge><Badge tone={ESTADO_TONE[p.estado]}>{p.estado}</Badge>
@@ -85,7 +85,7 @@ export default function Contenidos() {
                         {['Idea', 'En producción', 'Publicado'].map(s => <option key={s}>{s}</option>)}
                       </select>
                     </td>
-                    <td><button className="btn danger sm" onClick={() => confirmDelete('el post', () => deleteItem('contenidos', p.id))}>Eliminar</button></td>
+                    <td><button className="btn danger sm" onClick={() => deleteItemUndo('contenidos', p, 'El post')}>Eliminar</button></td>
                   </tr>
                 ))}
                 {!ordenados.length && <EmptyRow colSpan={6}><div className="big">Sin posts programados</div>Planifica tu primer contenido.</EmptyRow>}

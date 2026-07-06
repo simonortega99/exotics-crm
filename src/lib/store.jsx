@@ -342,13 +342,31 @@ export function StoreProvider({ children }) {
     removeRow(id)
   }, [])
 
+  // Vuelve a insertar un registro (para "deshacer" un borrado), conservando su id.
+  const restoreItem = useCallback((collection, item) => {
+    setData(prev => {
+      const arr = prev[collection] || []
+      if (arr.some(x => x.id === item.id)) return prev
+      return { ...prev, [collection]: [item, ...arr] }
+    })
+    pushItem(collection, item)
+  }, [])
+
+  // Borra un registro y muestra un aviso con opción de "Deshacer" (lo restaura).
+  const deleteItemUndo = useCallback((collection, item, label = 'Elemento') => {
+    const snapshot = { ...item }
+    setData(prev => ({ ...prev, [collection]: (prev[collection] || []).filter(x => x.id !== item.id) }))
+    removeRow(item.id)
+    toast(`${label} eliminado`, 'info', { label: 'Deshacer', fn: () => restoreItem(collection, snapshot) })
+  }, [restoreItem])
+
   const setField = useCallback((field, value) => {
     const next = { ...dataRef.current, [field]: value }
     setData(prev => ({ ...prev, [field]: value }))
     if (SETTINGS_KEYS.includes(field)) saveSettings(next)
   }, [])
 
-  const value = { data, setData, addItem, updateItem, deleteItem, setField, loaded }
+  const value = { data, setData, addItem, updateItem, deleteItem, restoreItem, deleteItemUndo, setField, loaded }
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 

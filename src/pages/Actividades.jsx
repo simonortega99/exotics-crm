@@ -3,7 +3,7 @@ import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, isOverdue, inRange, weekRange, monthRange, ASESORES } from '../lib/utils.js'
 import { Topbar, Page, Card, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { ArrowUpDown } from 'lucide-react'
 
@@ -13,7 +13,7 @@ const TIPO_TONE = { Fidelización: 'violet', Seguimiento: 'cyan', Cita: 'amber',
 const calTone = a => a.done ? 'done' : (TIPO_TONE[a.tipo] || 'cyan')
 
 export default function Actividades() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [vista, setVista] = useState('lista')
@@ -140,7 +140,7 @@ export default function Actividades() {
                   <div style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
                     {a.titulo} <Badge tone={TIPO_TONE[a.tipo] || 'gray'}>{a.tipo}</Badge>
                   </div>
-                  <button className="btn danger sm" onClick={() => confirmDelete('la actividad', () => deleteItem('actividades', a.id))}>×</button>
+                  <button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La actividad')}>×</button>
                 </div>
               ))}
               {!delDia.length && <div className="text-3" style={{ fontSize: 12.5, padding: '6px 0' }}>Sin actividades este día.</div>}
@@ -170,7 +170,7 @@ export default function Actividades() {
                       <td>
                         <Kebab items={[
                           { label: 'Editar', onClick: () => setEditing(a) },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete('la actividad', () => deleteItem('actividades', a.id)) },
+                          { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('actividades', a, 'La actividad') },
                         ]} />
                       </td>
                     </tr>

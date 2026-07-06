@@ -11,7 +11,7 @@ function iso(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-export default function Calendar({ events = [], selectedDate, onSelectDay, onEventClick }) {
+export default function Calendar({ events = [], selectedDate, onSelectDay, onEventClick, onDayDoubleClick }) {
   const now = new Date()
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() })
 
@@ -55,7 +55,8 @@ export default function Calendar({ events = [], selectedDate, onSelectDay, onEve
           const dayEvents = byDay[date] || []
           const cls = ['cal-cell', date === td ? 'today' : '', date === selectedDate ? 'selected' : ''].filter(Boolean).join(' ')
           return (
-            <div key={date} className={cls} onClick={() => onSelectDay && onSelectDay(date)}>
+            <div key={date} className={cls} onClick={() => onSelectDay && onSelectDay(date)}
+              onDoubleClick={() => onDayDoubleClick && onDayDoubleClick(date)}>
               <div className="cal-daynum">{d}</div>
               {dayEvents.slice(0, 3).map(e => (
                 <div key={e.id} className={`cal-chip ${e.tone || ''}`} title={e.label}

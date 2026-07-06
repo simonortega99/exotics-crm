@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, addDays, cumpleInfo, ROLES, ASESORES, THERMO_TONE, exportarHojaXls } from '../lib/utils.js'
 import { Topbar, Page, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { Download } from 'lucide-react'
 
@@ -11,7 +11,7 @@ const ROL_TONE = { lead: 'cyan', cliente: 'green', consignante: 'violet', aliado
 const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 
 export default function Contactos() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [selected, setSelected] = useState(null)
   const [query, setQuery] = useState('')
@@ -148,7 +148,7 @@ export default function Contactos() {
               </div>
               <div className="row gap-8">
                 <button className="btn cyan sm" onClick={crearOportunidad}>+ Oportunidad</button>
-                <button className="btn ghost sm" style={{ color: '#fff' }} onClick={() => confirmDelete(`a ${lead.nombre}`, () => { deleteItem('leads', lead.id); setSelected(null) })}>Eliminar</button>
+                <button className="btn ghost sm" style={{ color: '#fff' }} onClick={() => { deleteItemUndo('leads', lead, lead.nombre); setSelected(null) }}>Eliminar</button>
                 <button className="btn sm" onClick={() => setSelected(null)}>Cerrar</button>
               </div>
             </div>
@@ -200,7 +200,7 @@ export default function Contactos() {
                     <div style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
                       {a.titulo} <span className="text-3">· {fmtDate(a.fecha)}</span>
                     </div>
-                    <button className="btn danger sm" onClick={() => deleteItem('actividades', a.id)}>×</button>
+                    <button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La actividad')}>×</button>
                   </div>
                 ))}
                 {!tareas.length && <div className="text-3" style={{ fontSize: 12, padding: '4px 0' }}>Sin tareas. Aparecerán también en Actividades.</div>}

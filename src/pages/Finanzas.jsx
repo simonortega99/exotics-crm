@@ -2,12 +2,12 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtMoneyShort, today, num, ymOf } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 
 const TIPO_TONE = { Ingreso: 'green', Egreso: 'red', 'Reembolso pendiente': 'amber' }
 
 export default function Finanzas() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [persona, setPersona] = useState('todos')
   const [rango, setRango] = useState('todo') // todo | mes | anio
@@ -72,7 +72,7 @@ export default function Finanzas() {
                   <td className="cell-strong">{f.descripcion}</td>
                   <td className={`cell-money ${f.tipo === 'Ingreso' ? 't-green' : f.tipo === 'Egreso' ? 't-red' : ''}`}>{fmtMoney(f.monto)}</td>
                   <td className="text-2">{f.persona}</td>
-                  <td><button className="btn danger sm" onClick={() => confirmDelete('el registro', () => deleteItem('finanzas', f.id))}>Eliminar</button></td>
+                  <td><button className="btn danger sm" onClick={() => deleteItemUndo('finanzas', f, 'El registro')}>Eliminar</button></td>
                 </tr>
               ))}
               {!filtrado.length && <EmptyRow colSpan={6}><div className="big">Sin registros</div>Ajusta el filtro o crea un nuevo registro.</EmptyRow>}

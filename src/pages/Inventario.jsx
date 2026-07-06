@@ -1,8 +1,8 @@
 import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls } from '../lib/utils.js'
+import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { Download } from 'lucide-react'
 
 const ESTADO_TONE = { Disponible: 'green', Reservado: 'amber', Vendido: 'gray' }
@@ -10,7 +10,7 @@ const THERMO = THERMO_TONE
 const linkTipos = ['Consignación', 'Aliado']
 
 export default function Inventario() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filtro, setFiltro] = useState('Activos')
@@ -107,6 +107,7 @@ export default function Inventario() {
                       <td>
                         <div className="cell-strong">{v.marca} {v.modelo} <span className="text-3">{expandible ? (open ? '▾' : '▸') : ''}</span></div>
                         {(v.placa || v.motor) && <div className="text-3" style={{ fontSize: 11 }}>{[v.placa && `Placa: ${v.placa}`, v.motor].filter(Boolean).join(' · ')}</div>}
+                        <PicoPlacaLinea placa={v.placa} motor={v.motor} config={data.picoPlaca} />
                         {v.contactoNombre && <div className="text-3" style={{ fontSize: 11 }}>{v.tipo === 'Aliado' ? 'Aliado' : 'Consignante'}: {v.contactoNombre}</div>}
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
                       </td>
@@ -124,7 +125,7 @@ export default function Inventario() {
                       <td onClick={e => e.stopPropagation()}>
                         <Kebab items={[
                           { label: 'Editar', onClick: () => setEditing(v) },
-                          { label: 'Eliminar', danger: true, onClick: () => confirmDelete(`${v.marca} ${v.modelo}`, () => deleteItem('inventario', v.id)) },
+                          { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('inventario', v, `${v.marca} ${v.modelo}`) },
                         ]} />
                       </td>
                     </tr>
@@ -141,6 +142,7 @@ export default function Inventario() {
                             <DatoVenta label="Fuente" valor={venta.fuente || '—'} />
                             <DatoVenta label="Crédito" valor={venta.credito || 'Ninguno'} />
                             <DatoVenta label="Seguro" valor={venta.seguro || 'Ninguno'} />
+                            {venta.referido && <DatoVenta label="Referido" valor={`${venta.referido}${num(venta.comisionReferido) ? ` · ${fmtMoney(venta.comisionReferido)}` : ''}`} />}
                           </div>
                         </td>
                       </tr>
@@ -187,6 +189,25 @@ export default function Inventario() {
           setEditing(null); toast('Vehículo actualizado')
         }} onClose={() => setEditing(null)} />}
     </>
+  )
+}
+
+// Línea informativa de pico y placa para una fila del inventario.
+function PicoPlacaLinea({ placa, motor, config }) {
+  const dias = diasPicoPlaca(placa, motor, config)
+  if (dias === 'exento') {
+    return <div className="text-3" style={{ fontSize: 11 }}>Pico y placa: <span style={{ color: 'var(--green)', fontWeight: 600 }}>exento ({motor})</span></div>
+  }
+  if (!placa || dias === null) return null
+  // Si aún no se configuró ningún dígito, no ensuciamos cada fila con "sin restricción".
+  const hayConfig = config && Object.values(config).some(arr => (arr || []).length)
+  if (!hayConfig) return null
+  return (
+    <div className="text-3" style={{ fontSize: 11 }}>
+      Pico y placa: {dias.length
+        ? <span style={{ color: 'var(--red)', fontWeight: 600 }}>{nombresDias(dias)}</span>
+        : <span>sin restricción</span>}
+    </div>
   )
 }
 

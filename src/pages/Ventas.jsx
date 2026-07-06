@@ -5,7 +5,7 @@ import {
   inRange, monthRange, yearRange, ytdRange, shiftYear, addMonths, nextBirthdayDate,
 } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
-import { toast, confirmDelete } from '../components/feedback.jsx'
+import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 
 function metrics(arr) {
@@ -20,7 +20,7 @@ const FUENTES = ['Directo', 'Instagram', 'Referido', 'Mercado Libre', 'VTN', 'Ot
 const ORIGEN_CREDITO = ['Ninguno', 'Propio', 'Tercero']
 
 export default function Ventas() {
-  const { data, addItem, updateItem, deleteItem } = useStore()
+  const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const { user, isAdmin } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -57,6 +57,7 @@ export default function Ventas() {
       precio: num(form.precio), comisionPct: form.comisionPct, comision: num(form.comision),
       ganancia: num(form.ganancia) || num(form.comision), owner: form.owner || 'Simón',
       fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota || '',
+      referido: form.referido || '', comisionReferidoPct: form.comisionReferidoPct || '', comisionReferido: num(form.comisionReferido),
       diasVenta, esAliado: !vehiculo,
     })
     if (vehiculo) updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
@@ -206,6 +207,11 @@ export default function Ventas() {
                         {[v.credito && v.credito !== 'Ninguno' && `Créd: ${v.credito}`, v.seguro && v.seguro !== 'Ninguno' && `Seg: ${v.seguro}`].filter(Boolean).join(' · ')}
                       </div>
                     )}
+                    {v.referido && (
+                      <div className="text-3" style={{ fontSize: 10 }}>
+                        Referido: {v.referido}{num(v.comisionReferido) ? ` · ${fmtMoney(v.comisionReferido)}` : ''}
+                      </div>
+                    )}
                   </td>
                   <td className="cell-money t-cyan">{fmtMoney(v.precio)}</td>
                   <td className="cell-money t-green">{fmtMoney(num(v.ganancia) || num(v.comision))}</td>
@@ -213,7 +219,7 @@ export default function Ventas() {
                   <td>
                     <Kebab items={[
                       { label: 'Editar', onClick: () => setEditing(v) },
-                      { label: 'Eliminar', danger: true, onClick: () => confirmDelete('la venta', () => deleteItem('ventas', v.id)) },
+                      { label: 'Eliminar', danger: true, onClick: () => deleteItemUndo('ventas', v, 'La venta') },
                     ]} />
                   </td>
                 </tr>
@@ -236,17 +242,29 @@ export default function Ventas() {
 function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
   const [form, setForm] = useState({
     fecha: venta.fecha || today(), owner: venta.owner || asesores[0] || 'Simón',
-    clienteId: venta.clienteId || '', precio: venta.precio || '', comision: venta.comision || '', ganancia: venta.ganancia || '',
+    clienteId: venta.clienteId || '', precio: venta.precio || '', comisionPct: venta.comisionPct || '', comision: venta.comision || '', ganancia: venta.ganancia || '',
     fuente: venta.fuente || 'Directo', credito: venta.credito || 'Ninguno', seguro: venta.seguro || 'Ninguno', nota: venta.nota || '',
+    referido: venta.referido || '', comisionReferidoPct: venta.comisionReferidoPct || '', comisionReferido: venta.comisionReferido || '',
   })
-  const set = (k, v) => setForm({ ...form, [k]: v })
+  // Actualización funcional: evita pisar campos si se cambian varios seguidos.
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // % de comisión → recalcula el monto en $ sobre el precio (respeta si el
+  // ingreso venía igualado a la comisión).
+  const setPct = val => setForm(f => {
+    const c = (f.precio !== '' && val !== '') ? Math.round(num(f.precio) * num(val) / 100) : f.comision
+    const g = (f.ganancia === f.comision || f.ganancia === '') ? c : f.ganancia
+    return { ...f, comisionPct: val, comision: c, ganancia: g }
+  })
+  const setRefPct = val => setForm(f => { const c = (f.precio !== '' && val !== '') ? Math.round(num(f.precio) * num(val) / 100) : f.comisionReferido; return { ...f, comisionReferidoPct: val, comisionReferido: c } })
+
   function save() {
     const cliente = leads.find(l => l.id === form.clienteId)
     onSave({
       fecha: form.fecha, owner: form.owner,
       clienteId: form.clienteId, cliente: cliente ? cliente.nombre : venta.cliente,
-      precio: num(form.precio), comision: num(form.comision), ganancia: num(form.ganancia) || num(form.comision),
+      precio: num(form.precio), comisionPct: form.comisionPct, comision: num(form.comision), ganancia: num(form.ganancia) || num(form.comision),
       fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota,
+      referido: form.referido || '', comisionReferidoPct: form.comisionReferidoPct || '', comisionReferido: num(form.comisionReferido),
     })
   }
   return (
@@ -266,9 +284,12 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
       </Field>
       <div className="form-grid cols-2">
         <Field label="Precio de venta"><NumberInput prefix="$" value={form.precio} onChange={v => set('precio', v)} /></Field>
-        <Field label="Comisión ($)"><NumberInput prefix="$" value={form.comision} onChange={v => set('comision', v)} /></Field>
+        <Field label="% Comisión"><input className="input" value={form.comisionPct} onChange={e => setPct(e.target.value)} placeholder="ej. 5" /></Field>
       </div>
-      <Field label="Ingreso generado (comisión o ganancia)"><NumberInput prefix="$" value={form.ganancia} onChange={v => set('ganancia', v)} /></Field>
+      <div className="form-grid cols-2">
+        <Field label="Comisión ($)"><NumberInput prefix="$" value={form.comision} onChange={v => set('comision', v)} /></Field>
+        <Field label="Ingreso generado"><NumberInput prefix="$" value={form.ganancia} onChange={v => set('ganancia', v)} /></Field>
+      </div>
       <Field label="Fuente de la venta">
         <select className="select" value={form.fuente} onChange={e => set('fuente', e.target.value)}>{FUENTES.map(f => <option key={f}>{f}</option>)}</select>
       </Field>
@@ -276,6 +297,7 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
         <Field label="Crédito"><select className="select" value={form.credito} onChange={e => set('credito', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
         <Field label="Seguro"><select className="select" value={form.seguro} onChange={e => set('seguro', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
       </div>
+      <ReferidoFields form={form} setForm={setForm} setRefPct={setRefPct} />
       <Field label="Nota / comentarios"><textarea className="input" rows={2} value={form.nota} onChange={e => set('nota', e.target.value)} placeholder="Opcional" /></Field>
     </Modal>
   )
@@ -315,7 +337,9 @@ function CompareRow({ label, a, b, fmt }) {
 }
 
 function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
-  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'Ninguno', seguro: 'Ninguno', nota: '' })
+  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'Ninguno', seguro: 'Ninguno', nota: '', referido: '', comisionReferidoPct: '', comisionReferido: '' })
+
+  const invOrdenado = [...inventario].sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`, 'es', { sensitivity: 'base' }))
 
   function pickVehiculo(id) {
     const v = inventario.find(x => x.id === id)
@@ -328,6 +352,8 @@ function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
   const recompute = (precio, pct) => (precio !== '' && pct !== '') ? Math.round(num(precio) * num(pct) / 100) : form.comision
   const setPrecio = val => setForm(f => { const c = recompute(val, f.comisionPct); return { ...f, precio: val, comision: c, ganancia: f.ganancia === f.comision || f.ganancia === '' ? c : f.ganancia } })
   const setPct = val => setForm(f => { const c = recompute(f.precio, val); return { ...f, comisionPct: val, comision: c, ganancia: f.ganancia === f.comision || f.ganancia === '' ? c : f.ganancia } })
+  // % de comisión del referido → calcula el monto sobre el precio de venta
+  const setRefPct = val => setForm(f => { const c = (f.precio !== '' && val !== '') ? Math.round(num(f.precio) * num(val) / 100) : f.comisionReferido; return { ...f, comisionReferidoPct: val, comisionReferido: c } })
 
   return (
     <Modal title="Registrar venta" onClose={onClose} width={470}
@@ -335,7 +361,7 @@ function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
       <Field label="Vehículo (inventario)">
         <select className="select" value={form.vehiculoId} onChange={e => pickVehiculo(e.target.value)}>
           <option value="">— Venta sin inventario (aliado) —</option>
-          {inventario.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.anio} — {fmtMoney(v.precio)}{v.comision ? ` · ${v.comision}%` : ''}</option>)}
+          {invOrdenado.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.anio} — {fmtMoney(v.precio)}{v.comision ? ` · ${v.comision}%` : ''}</option>)}
         </select>
       </Field>
       <div className="form-grid cols-2">
@@ -371,7 +397,24 @@ function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
           <select className="select" value={form.seguro} onChange={e => setForm({ ...form, seguro: e.target.value })}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select>
         </Field>
       </div>
+      <ReferidoFields form={form} setForm={setForm} setRefPct={setRefPct} />
       <Field label="Nota / comentarios"><textarea className="input" rows={2} value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} placeholder="Opcional" /></Field>
     </Modal>
+  )
+}
+
+// Sección reutilizable: comisión a pagar a un referido por la venta.
+function ReferidoFields({ form, setForm, setRefPct }) {
+  return (
+    <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12, marginBottom: 4 }}>
+      <div className="overline mb-8">Comisión a referido (opcional)</div>
+      <Field label="Referido por">
+        <input className="input" value={form.referido || ''} onChange={e => setForm(f => ({ ...f, referido: e.target.value }))} placeholder="Nombre de quien refirió la venta" />
+      </Field>
+      <div className="form-grid cols-2">
+        <Field label="% del referido"><input className="input" value={form.comisionReferidoPct || ''} onChange={e => setRefPct(e.target.value)} placeholder="ej. 2" /></Field>
+        <Field label="Comisión referido ($)"><NumberInput prefix="$" value={form.comisionReferido} onChange={v => setForm(f => ({ ...f, comisionReferido: v }))} /></Field>
+      </div>
+    </div>
   )
 }

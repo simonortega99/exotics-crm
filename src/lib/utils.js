@@ -213,6 +213,29 @@ export function picoPlacaRestringido(placa, motor, fecha, config) {
   return restr.map(Number).includes(dig)
 }
 
+const DIA_NOMBRE = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes' }
+
+// Días (1=Lun … 5=Vie) en que este vehículo tiene pico y placa según su último
+// dígito de placa. Devuelve:
+//   'exento' → híbrido/eléctrico (nunca tiene)
+//   null     → sin placa o sin configuración para saberlo
+//   [2, 4]   → array de días de la semana restringidos (posible vacío)
+export function diasPicoPlaca(placa, motor, config) {
+  if (motor === 'Híbrido' || motor === 'Eléctrico') return 'exento'
+  const dig = ultimoDigitoPlaca(placa)
+  if (dig == null || !config) return null
+  const dias = []
+  for (let wd = 1; wd <= 5; wd++) if ((config[wd] || []).map(Number).includes(dig)) dias.push(wd)
+  return dias
+}
+
+// [2, 4] → "Martes y Jueves" · [1,3,5] → "Lunes, Miércoles y Viernes"
+export function nombresDias(wds) {
+  const ns = (wds || []).map(w => DIA_NOMBRE[w]).filter(Boolean)
+  if (ns.length <= 1) return ns.join('')
+  return ns.slice(0, -1).join(', ') + ' y ' + ns[ns.length - 1]
+}
+
 // ============================================================
 // Fidelización — nivel según compras y monto acumulado
 // ============================================================
