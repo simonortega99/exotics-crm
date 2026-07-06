@@ -196,7 +196,7 @@ export default function Inventario() {
 function PicoPlacaLinea({ placa, motor, config }) {
   const dias = diasPicoPlaca(placa, motor, config)
   if (dias === 'exento') {
-    return <div className="text-3" style={{ fontSize: 11 }}>Pico y placa: <span style={{ color: 'var(--green)', fontWeight: 600 }}>exento ({motor})</span></div>
+    return <div className="text-3" style={{ fontSize: 11 }}>Pico y placa: exento ({motor})</div>
   }
   if (!placa || dias === null) return null
   // Si aún no se configuró ningún dígito, no ensuciamos cada fila con "sin restricción".
@@ -204,9 +204,7 @@ function PicoPlacaLinea({ placa, motor, config }) {
   if (!hayConfig) return null
   return (
     <div className="text-3" style={{ fontSize: 11 }}>
-      Pico y placa: {dias.length
-        ? <span style={{ color: 'var(--red)', fontWeight: 600 }}>{nombresDias(dias)}</span>
-        : <span>sin restricción</span>}
+      Pico y placa: {dias.length ? nombresDias(dias) : 'sin restricción'}
     </div>
   )
 }
