@@ -103,6 +103,7 @@ export function StoreProvider({ children }) {
   useEffect(() => { dataRef.current = data }, [data])
   const pending = useRef(0)          // escrituras en vuelo (protege la reconciliación)
   const warnedOffline = useRef(false) // evita repetir el aviso de error
+  const writeSeq = useRef(0)          // aumenta con cada escritura (detecta cambios durante un fetch)
 
   // ---------- helpers de persistencia por fila ----------
   const nowISO = () => new Date().toISOString()
@@ -112,6 +113,7 @@ export function StoreProvider({ children }) {
   // guardó cuando en realidad el dato no llegó a la nube).
   async function withRetry(makeQuery, label, tries = 4) {
     pending.current++
+    writeSeq.current++
     try {
       for (let i = 0; i < tries; i++) {
         try {
@@ -138,12 +140,10 @@ export function StoreProvider({ children }) {
 
   function pushItem(collection, item) {
     if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
-    // En cada intento envía la versión MÁS reciente del registro (evita que un
-    // reintento pise una edición posterior con datos viejos).
-    withRetry(() => {
-      const latest = (dataRef.current[collection] || []).find(x => x.id === item.id) || item
-      return supabase.from('crm_items').upsert({ id: item.id, collection, data: latest, updated_at: nowISO() })
-    }, 'upsert item')
+    // Persiste EXACTAMENTE el snapshot que calculó quien llama (updateItem ya
+    // hizo el merge). No re-leer dataRef aquí: en el momento síncrono de la
+    // llamada el ref aún tiene el valor viejo, y guardarlo revertía la edición.
+    withRetry(() => supabase.from('crm_items').upsert({ id: item.id, collection, data: item, updated_at: nowISO() }), 'upsert item')
   }
   function removeRow(id) {
     if (mode.current !== 'perrow' || !supabase || !signedIn.current) return
@@ -257,16 +257,20 @@ export function StoreProvider({ children }) {
     if (!supabase || !signedIn.current || pending.current > 0 || reconciling.current) return
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     reconciling.current = true
+    const seq = writeSeq.current
+    // Si hubo cualquier escritura entre que arrancó y terminó el fetch, los datos
+    // leídos pueden ser viejos → no los apliques (evita revertir una edición reciente).
+    const frescos = () => pending.current === 0 && writeSeq.current === seq
     try {
       if (mode.current === 'perrow') {
         const { data: items, error } = await supabase.from('crm_items').select('id, collection, data')
         if (error) return
         const { data: srow } = await supabase.from('crm_state').select('data').eq('id', 'settings').maybeSingle()
-        if (pending.current > 0) return // llegó una escritura mientras leíamos
+        if (!frescos()) return
         build(items || [], (srow && srow.data) || {})
       } else if (mode.current === 'blob') {
         const { data: row } = await supabase.from('crm_state').select('data').eq('id', 'main').maybeSingle()
-        if (pending.current > 0) return
+        if (!frescos()) return
         if (row && row.data) { skipSave.current = true; setData(migrate(row.data)) }
       }
     } catch (e) { console.warn('reconcile', e && e.message) }
