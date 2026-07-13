@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, addDays, cumpleInfo, ROLES, ASESORES, THERMO_TONE, exportarHojaXls } from '../lib/utils.js'
-import { Topbar, Page, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect } from '../components/ui.jsx'
+import { Topbar, Page, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, VehiculoInteresSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { Download } from 'lucide-react'
@@ -13,6 +13,7 @@ const cap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s)
 export default function Contactos() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
   const [showForm, setShowForm] = useState(false)
+  const [showOpp, setShowOpp] = useState(false)
   const [selected, setSelected] = useState(null)
   const [query, setQuery] = useState('')
   const [rolFilter, setRolFilter] = useState('todos')
@@ -27,6 +28,14 @@ export default function Contactos() {
   const visibleLeads = isAdmin ? data.leads : data.leads.filter(l => l.owner === user.nombre)
   const lead = data.leads.find(l => l.id === selected)
   const invActivo = data.inventario.filter(v => v.estado !== 'Vendido')
+  // Vehículos de interés = los de las oportunidades ABIERTAS de cada contacto.
+  const oppVehsByContacto = useMemo(() => {
+    const m = {}
+    ;(data.oportunidades || []).filter(o => o.estado === 'Abierta' && o.contactoId).forEach(o => {
+      ;(m[o.contactoId] = m[o.contactoId] || []).push(o.vehiculoInteres || 'Por definir')
+    })
+    return m
+  }, [data.oportunidades])
   const tareas = useMemo(
     () => data.actividades.filter(a => a.leadId === selected).sort((a, b) => (a.fecha > b.fecha ? 1 : -1)),
     [data.actividades, selected]
@@ -71,13 +80,14 @@ export default function Contactos() {
     exportarHojaXls(`Contactos_${today()}.xls`, 'Contactos · Exotics Co.', headers, rows)
     toast('Contactos exportados')
   }
-  function crearOportunidad() {
+  function crearOportunidad({ vehiculoId, vehiculoInteres, valor, financiacion }) {
     addItem('oportunidades', {
       contactoId: lead.id, contacto: lead.nombre,
-      vehiculoInteres: lead.vehiculoInteres || '', vehiculoId: lead.vehiculoId || '',
-      valor: '', stage: 0, estado: 'Abierta', financiacion: false, owner: lead.owner || 'Simón', fecha: today(),
+      vehiculoInteres: vehiculoInteres || '', vehiculoId: vehiculoId || '',
+      valor: valor || '', stage: 0, estado: 'Abierta', financiacion: !!financiacion, owner: lead.owner || 'Simón', fecha: today(),
     })
-    toast('Oportunidad creada · míralá en Oportunidades')
+    setShowOpp(false)
+    toast('Oportunidad creada · mírala en Oportunidades')
   }
 
   const esLead = (lead?.rol || 'lead') === 'lead'
@@ -127,7 +137,9 @@ export default function Contactos() {
                     <td><Badge tone={ROL_TONE[l.rol] || 'gray'}>{cap(l.rol || 'lead')}</Badge></td>
                     <td className="num">{l.tel || <span className="muted">—</span>}</td>
                     <td>{(l.rol || 'lead') === 'lead' ? <Badge tone={THERMO[l.thermo] || 'gray'} dot>{cap(l.thermo || 'frío')}</Badge> : <span className="muted">—</span>}</td>
-                    <td>{l.vehiculoInteres ? <Badge tone="cyan">{l.vehiculoInteres}</Badge> : <span className="muted">—</span>}</td>
+                    <td>{(oppVehsByContacto[l.id] || []).length
+                      ? oppVehsByContacto[l.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
+                      : <span className="muted">—</span>}</td>
                     <td>{l.cumple ? <span>{fmtDate(l.cumple)} {ci && ci.diff <= 7 && <Badge tone="amber">🎂 {ci.diff === 0 ? 'hoy' : `en ${ci.diff}d`}</Badge>}</span> : <span className="muted">—</span>}</td>
                     <td className="num text-2">{l.fechaCreacion ? fmtDate(l.fechaCreacion) : '—'}</td>
                     <td className="text-3">→</td>
@@ -147,7 +159,7 @@ export default function Contactos() {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{[lead.tel, lead.email, lead.instagram].filter(Boolean).join(' · ')}</div>
               </div>
               <div className="row gap-8">
-                <button className="btn cyan sm" onClick={crearOportunidad}>+ Oportunidad</button>
+                <button className="btn cyan sm" onClick={() => setShowOpp(true)}>+ Oportunidad</button>
                 <button className="btn ghost sm" style={{ color: '#fff' }} onClick={() => { deleteItemUndo('leads', lead, lead.nombre); setSelected(null) }}>Eliminar</button>
                 <button className="btn sm" onClick={() => setSelected(null)}>Cerrar</button>
               </div>
@@ -168,8 +180,11 @@ export default function Contactos() {
                   </Field>
                 )}
                 <Field label="Vehículo de interés">
-                  <VehiculoInteresSelect inventario={invActivo} value={{ vehiculoId: lead.vehiculoId || '', vehiculoInteres: lead.vehiculoInteres || '' }}
-                    onChange={({ vehiculoId, vehiculoInteres }) => updateItem('leads', lead.id, { vehiculoId, vehiculoInteres })} />
+                  <div className="row gap-6 wrap" style={{ minHeight: 34, alignItems: 'center' }}>
+                    {(oppVehsByContacto[lead.id] || []).length
+                      ? oppVehsByContacto[lead.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
+                      : <span className="text-3" style={{ fontSize: 12 }}>Sin oportunidad abierta. Usa "+ Oportunidad" para asociar un vehículo.</span>}
+                  </div>
                 </Field>
                 {['lead', 'cliente'].includes(lead.rol || 'lead') && (
                   <Field label="Vehículo de su propiedad">
@@ -219,12 +234,37 @@ export default function Contactos() {
       </Page>
 
       {showForm && <LeadForm inventario={invActivo} asesores={ownerOptions} onSave={handleAddLead} onClose={() => setShowForm(false)} />}
+      {showOpp && lead && <NuevaOppModal lead={lead} inventario={invActivo} onSave={crearOportunidad} onClose={() => setShowOpp(false)} />}
     </>
   )
 }
 
+// Crea una oportunidad para el contacto: AQUÍ se asocia el vehículo (no en el contacto).
+function NuevaOppModal({ lead, inventario, onSave, onClose }) {
+  const [veh, setVeh] = useState({ vehiculoId: '', vehiculoInteres: '' })
+  const [valor, setValor] = useState('')
+  const [financiacion, setFinanciacion] = useState(false)
+  function pick(next) {
+    setVeh(next)
+    const v = inventario.find(x => x.id === next.vehiculoId)
+    if (v && !valor) setValor(v.precio || '')
+  }
+  return (
+    <Modal title={`Nueva oportunidad · ${lead.nombre}`} onClose={onClose} width={440}
+      footer={<ModalButtons onClose={onClose} onSave={() => onSave({ ...veh, valor, financiacion })} saveLabel="Crear oportunidad" />}>
+      <Field label="Vehículo de interés">
+        <VehiculoInteresSelect inventario={inventario} value={veh} onChange={pick} />
+      </Field>
+      <Field label="Valor estimado"><NumberInput prefix="$" value={valor} onChange={setValor} /></Field>
+      <label className="row gap-8" style={{ fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
+        <input type="checkbox" checked={financiacion} onChange={e => setFinanciacion(e.target.checked)} /> Requiere financiación
+      </label>
+    </Modal>
+  )
+}
+
 function LeadForm({ inventario, asesores, onSave, onClose }) {
-  const [form, setForm] = useState({ nombre: '', tel: '', email: '', instagram: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoId: '', vehiculoInteres: '', vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '' })
+  const [form, setForm] = useState({ nombre: '', tel: '', email: '', instagram: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '' })
   const set = (k, v) => setForm({ ...form, [k]: v })
   return (
     <Modal title="Nuevo contacto" onClose={onClose} width={440}
@@ -253,10 +293,6 @@ function LeadForm({ inventario, asesores, onSave, onClose }) {
           </Field>
         )}
       </div>
-      <Field label="Vehículo de interés">
-        <VehiculoInteresSelect inventario={inventario} value={{ vehiculoId: form.vehiculoId, vehiculoInteres: form.vehiculoInteres }}
-          onChange={({ vehiculoId, vehiculoInteres }) => setForm({ ...form, vehiculoId, vehiculoInteres })} />
-      </Field>
       {['lead', 'cliente'].includes(form.rol) && (
         <Field label="Vehículo de su propiedad">
           <input className="input" value={form.vehiculoPropio} onChange={e => set('vehiculoPropio', e.target.value)} placeholder="Opcional · ej. Mazda CX-5 2020" />

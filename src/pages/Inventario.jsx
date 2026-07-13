@@ -38,12 +38,12 @@ export default function Inventario() {
     ? Math.round(disponibles.reduce((a, v) => a + (v.fechaIngreso ? daysSince(v.fechaIngreso) : 0), 0) / disponibles.length)
     : 0
 
+  // Interesados = contactos con una oportunidad ABIERTA por este vehículo.
+  // (Si la oportunidad se marca ganada o perdida, deja de aparecer.)
   function interesadosDe(vehiculoId) {
-    const opps = (data.oportunidades || []).filter(o => o.vehiculoId === vehiculoId && o.estado === 'Abierta')
-    const map = new Map()
-    data.leads.filter(l => l.vehiculoId === vehiculoId).forEach(l => map.set(l.id, { lead: l, opp: null }))
-    opps.forEach(o => { const l = data.leads.find(x => x.id === o.contactoId); map.set(l?.id || o.id, { lead: l || { nombre: o.contacto }, opp: o }) })
-    return [...map.values()]
+    return (data.oportunidades || [])
+      .filter(o => o.vehiculoId === vehiculoId && o.estado === 'Abierta')
+      .map(o => ({ lead: data.leads.find(x => x.id === o.contactoId) || { nombre: o.contacto }, opp: o }))
   }
   function exportar() {
     const headers = ['Marca', 'Modelo', 'Año', 'Placa', 'Motor', 'Tipo', 'Estado', 'Precio', 'Comisión %', 'Días en stock', 'Contacto', 'Referido por', '% Com. referido', 'Asesor', 'Fecha ingreso']
@@ -51,15 +51,6 @@ export default function Inventario() {
     exportarHojaXls(`Inventario_${today()}.xls`, 'Inventario · Exotics Co.', headers, rows)
     toast('Inventario exportado')
   }
-  function crearOpp(lead, v) {
-    addItem('oportunidades', {
-      contactoId: lead.id, contacto: lead.nombre, vehiculoId: v.id,
-      vehiculoInteres: `${v.marca} ${v.modelo} ${v.anio || ''}`.trim(),
-      valor: v.precio || '', stage: 1, estado: 'Abierta', financiacion: false, owner: lead.owner || 'Simón', fecha: today(),
-    })
-    toast(`Oportunidad creada para ${lead.nombre}`)
-  }
-
   return (
     <>
       <Topbar title="Inventario" sub={`${disponibles.length} disponibles · ${inv.filter(v => v.estado !== 'Vendido').length} activos`}>
@@ -150,7 +141,7 @@ export default function Inventario() {
                     {open && !venta && interesados.length > 0 && (
                       <tr>
                         <td colSpan={9} style={{ background: 'var(--surface-2)' }}>
-                          <div className="overline mb-12">Leads activos interesados en este vehículo</div>
+                          <div className="overline mb-12">Contactos con oportunidad abierta por este vehículo</div>
                           {interesados.map(({ lead, opp }, i) => (
                             <div key={i} className="row between" style={{ padding: '7px 2px', borderBottom: i < interesados.length - 1 ? '1px solid var(--line)' : 'none' }}>
                               <div className="row gap-8">
@@ -158,10 +149,7 @@ export default function Inventario() {
                                 {lead.thermo && <Badge tone={THERMO[lead.thermo] || 'gray'} dot>{lead.thermo}</Badge>}
                                 {lead.tel && <span className="text-3" style={{ fontSize: 11.5 }}>{lead.tel}</span>}
                               </div>
-                              <div>
-                                {opp ? <Badge tone="cyan">Oportunidad · {OPP_STAGES[opp.stage]}</Badge>
-                                  : <button className="btn cyan sm" onClick={() => crearOpp(lead, v)}>+ Oportunidad</button>}
-                              </div>
+                              <Badge tone="cyan">Oportunidad · {OPP_STAGES[opp.stage]}</Badge>
                             </div>
                           ))}
                         </td>
