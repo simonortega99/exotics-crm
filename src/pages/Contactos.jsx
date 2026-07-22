@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, addDays, cumpleInfo, ROLES, ASESORES, THERMO_TONE, exportarHojaXls } from '../lib/utils.js'
 import { Topbar, Page, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, VehiculoInteresSelect } from '../components/ui.jsx'
@@ -90,8 +90,6 @@ export default function Contactos() {
     toast('Oportunidad creada · mírala en Oportunidades')
   }
 
-  const esLead = (lead?.rol || 'lead') === 'lead'
-
   return (
     <>
       <Topbar title="Contactos" sub={`${visibleLeads.length} personas en tu directorio`}>
@@ -131,106 +129,112 @@ export default function Contactos() {
             <tbody>
               {sorted.map(l => {
                 const ci = cumpleInfo(l.cumple)
+                const open = selected === l.id
                 return (
-                  <tr key={l.id} className="clickable" onClick={() => setSelected(l.id)}>
-                    <td className="cell-strong">{l.nombre}</td>
-                    <td><Badge tone={ROL_TONE[l.rol] || 'gray'}>{cap(l.rol || 'lead')}</Badge></td>
-                    <td className="num">{l.tel || <span className="muted">—</span>}</td>
-                    <td>{(l.rol || 'lead') === 'lead' ? <Badge tone={THERMO[l.thermo] || 'gray'} dot>{cap(l.thermo || 'frío')}</Badge> : <span className="muted">—</span>}</td>
-                    <td>{(oppVehsByContacto[l.id] || []).length
-                      ? oppVehsByContacto[l.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
-                      : <span className="muted">—</span>}</td>
-                    <td>{l.cumple ? <span>{fmtDate(l.cumple)} {ci && ci.diff <= 7 && <Badge tone="amber">🎂 {ci.diff === 0 ? 'hoy' : `en ${ci.diff}d`}</Badge>}</span> : <span className="muted">—</span>}</td>
-                    <td className="num text-2">{l.fechaCreacion ? fmtDate(l.fechaCreacion) : '—'}</td>
-                    <td className="text-3">→</td>
-                  </tr>
+                  <Fragment key={l.id}>
+                    <tr className={`clickable${open ? ' selected' : ''}`} onClick={() => setSelected(open ? null : l.id)}>
+                      <td className="cell-strong">{l.nombre}</td>
+                      <td><Badge tone={ROL_TONE[l.rol] || 'gray'}>{cap(l.rol || 'lead')}</Badge></td>
+                      <td className="num">{l.tel || <span className="muted">—</span>}</td>
+                      <td>{(l.rol || 'lead') === 'lead' ? <Badge tone={THERMO[l.thermo] || 'gray'} dot>{cap(l.thermo || 'frío')}</Badge> : <span className="muted">—</span>}</td>
+                      <td>{(oppVehsByContacto[l.id] || []).length
+                        ? oppVehsByContacto[l.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
+                        : <span className="muted">—</span>}</td>
+                      <td>{l.cumple ? <span>{fmtDate(l.cumple)} {ci && ci.diff <= 7 && <Badge tone="amber">🎂 {ci.diff === 0 ? 'hoy' : `en ${ci.diff}d`}</Badge>}</span> : <span className="muted">—</span>}</td>
+                      <td className="num text-2">{l.fechaCreacion ? fmtDate(l.fechaCreacion) : '—'}</td>
+                      <td className="text-3">{open ? '▾' : '→'}</td>
+                    </tr>
+                    {open && (
+                      <tr>
+                        <td colSpan={8} style={{ padding: 10, background: 'var(--surface-2)' }}>
+                          <div className="card flush">
+                            <div style={{ padding: '14px 18px', background: 'var(--ink)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>{l.nombre}</div>
+                                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{[l.tel, l.email, l.instagram].filter(Boolean).join(' · ')}</div>
+                              </div>
+                              <div className="row gap-8">
+                                <button className="btn cyan sm" onClick={() => setShowOpp(true)}>+ Oportunidad</button>
+                                <button className="btn ghost sm" style={{ color: '#fff' }} onClick={() => { deleteItemUndo('leads', l, l.nombre); setSelected(null) }}>Eliminar</button>
+                                <button className="btn sm" onClick={() => setSelected(null)}>Cerrar</button>
+                              </div>
+                            </div>
+                            <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                              <div>
+                                <div className="overline mb-12">Datos del contacto</div>
+                                <Field label="Rol">
+                                  <select className="select" value={l.rol || 'lead'} onChange={e => updateItem('leads', l.id, { rol: e.target.value })}>
+                                    {ROLES.map(r => <option key={r} value={r}>{cap(r)}</option>)}
+                                  </select>
+                                </Field>
+                                {(l.rol || 'lead') === 'lead' && (
+                                  <Field label="Temperatura">
+                                    <select className="select" value={l.thermo || 'frio'} onChange={e => updateItem('leads', l.id, { thermo: e.target.value })}>
+                                      <option value="frio">Frío</option><option value="tibio">Tibio</option><option value="caliente">Caliente</option>
+                                    </select>
+                                  </Field>
+                                )}
+                                <Field label="Vehículo de interés">
+                                  <div className="row gap-6 wrap" style={{ minHeight: 34, alignItems: 'center' }}>
+                                    {(oppVehsByContacto[l.id] || []).length
+                                      ? oppVehsByContacto[l.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
+                                      : <span className="text-3" style={{ fontSize: 12 }}>Sin oportunidad abierta. Usa "+ Oportunidad" para asociar un vehículo.</span>}
+                                  </div>
+                                </Field>
+                                {['lead', 'cliente'].includes(l.rol || 'lead') && (
+                                  <Field label="Vehículo de su propiedad">
+                                    <input className="input" value={l.vehiculoPropio || ''} onChange={e => updateItem('leads', l.id, { vehiculoPropio: e.target.value })} placeholder="Ej. Mazda CX-5 2020" />
+                                  </Field>
+                                )}
+                                {l.rol === 'consignante' && (
+                                  <Field label="Vehículo en consignación (de su propiedad)">
+                                    <VehiculoInteresSelect inventario={invActivo} value={{ vehiculoId: l.vehiculoConsignadoId || '', vehiculoInteres: l.vehiculoConsignado || '' }}
+                                      onChange={({ vehiculoId, vehiculoInteres }) => updateItem('leads', l.id, { vehiculoConsignadoId: vehiculoId, vehiculoConsignado: vehiculoInteres })} />
+                                  </Field>
+                                )}
+                                <Field label="Instagram">
+                                  <input className="input" value={l.instagram || ''} onChange={e => updateItem('leads', l.id, { instagram: e.target.value })} placeholder="@usuario" />
+                                </Field>
+                                <Field label="Cumpleaños">
+                                  <input className="input" type="date" value={l.cumple || ''} onChange={e => updateItem('leads', l.id, { cumple: e.target.value })} />
+                                </Field>
+                                <Field label="Nota / observación">
+                                  <textarea className="input" rows={3} value={l.nota || ''} onChange={e => updateItem('leads', l.id, { nota: e.target.value })} placeholder="Notas internas sobre el contacto…" />
+                                </Field>
+                              </div>
+                              <div>
+                                <div className="overline mb-12">Tareas de seguimiento</div>
+                                {tareas.map(a => (
+                                  <div key={a.id} className="row gap-8" style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
+                                    <input type="checkbox" checked={!!a.done} onChange={() => updateItem('actividades', a.id, { done: !a.done })} />
+                                    <div style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
+                                      {a.titulo} <span className="text-3">· {fmtDate(a.fecha)}</span>
+                                    </div>
+                                    <button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La actividad')}>×</button>
+                                  </div>
+                                ))}
+                                {!tareas.length && <div className="text-3" style={{ fontSize: 12, padding: '4px 0' }}>Sin tareas. Aparecerán también en Actividades.</div>}
+                                <div className="mt-8" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                  <input className="input" placeholder="Nueva tarea…" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} />
+                                  <div className="row gap-6">
+                                    <input className="input" type="date" value={taskDate} onChange={e => setTaskDate(e.target.value)} />
+                                    {[1, 3, 7, 14].map(n => <button key={n} className="btn sm" onClick={() => setTaskDate(addDays(n))}>+{n}d</button>)}
+                                  </div>
+                                  <button className="btn primary" onClick={addTask}>+ Agregar tarea</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 )
               })}
               {!filtered.length && <EmptyRow colSpan={8}><div className="big">Sin contactos</div>Agrega tu primer contacto para empezar.</EmptyRow>}
             </tbody>
           </table>
         </div>
-
-        {lead && (
-          <div className="card flush mt-16">
-            <div style={{ padding: '14px 18px', background: 'var(--ink)', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>{lead.nombre}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{[lead.tel, lead.email, lead.instagram].filter(Boolean).join(' · ')}</div>
-              </div>
-              <div className="row gap-8">
-                <button className="btn cyan sm" onClick={() => setShowOpp(true)}>+ Oportunidad</button>
-                <button className="btn ghost sm" style={{ color: '#fff' }} onClick={() => { deleteItemUndo('leads', lead, lead.nombre); setSelected(null) }}>Eliminar</button>
-                <button className="btn sm" onClick={() => setSelected(null)}>Cerrar</button>
-              </div>
-            </div>
-            <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-              <div>
-                <div className="overline mb-12">Datos del contacto</div>
-                <Field label="Rol">
-                  <select className="select" value={lead.rol || 'lead'} onChange={e => updateItem('leads', lead.id, { rol: e.target.value })}>
-                    {ROLES.map(r => <option key={r} value={r}>{cap(r)}</option>)}
-                  </select>
-                </Field>
-                {esLead && (
-                  <Field label="Temperatura">
-                    <select className="select" value={lead.thermo || 'frio'} onChange={e => updateItem('leads', lead.id, { thermo: e.target.value })}>
-                      <option value="frio">Frío</option><option value="tibio">Tibio</option><option value="caliente">Caliente</option>
-                    </select>
-                  </Field>
-                )}
-                <Field label="Vehículo de interés">
-                  <div className="row gap-6 wrap" style={{ minHeight: 34, alignItems: 'center' }}>
-                    {(oppVehsByContacto[lead.id] || []).length
-                      ? oppVehsByContacto[lead.id].map((v, i) => <Badge key={i} tone="cyan">{v}</Badge>)
-                      : <span className="text-3" style={{ fontSize: 12 }}>Sin oportunidad abierta. Usa "+ Oportunidad" para asociar un vehículo.</span>}
-                  </div>
-                </Field>
-                {['lead', 'cliente'].includes(lead.rol || 'lead') && (
-                  <Field label="Vehículo de su propiedad">
-                    <input className="input" value={lead.vehiculoPropio || ''} onChange={e => updateItem('leads', lead.id, { vehiculoPropio: e.target.value })} placeholder="Ej. Mazda CX-5 2020" />
-                  </Field>
-                )}
-                {lead.rol === 'consignante' && (
-                  <Field label="Vehículo en consignación (de su propiedad)">
-                    <VehiculoInteresSelect inventario={invActivo} value={{ vehiculoId: lead.vehiculoConsignadoId || '', vehiculoInteres: lead.vehiculoConsignado || '' }}
-                      onChange={({ vehiculoId, vehiculoInteres }) => updateItem('leads', lead.id, { vehiculoConsignadoId: vehiculoId, vehiculoConsignado: vehiculoInteres })} />
-                  </Field>
-                )}
-                <Field label="Instagram">
-                  <input className="input" value={lead.instagram || ''} onChange={e => updateItem('leads', lead.id, { instagram: e.target.value })} placeholder="@usuario" />
-                </Field>
-                <Field label="Cumpleaños">
-                  <input className="input" type="date" value={lead.cumple || ''} onChange={e => updateItem('leads', lead.id, { cumple: e.target.value })} />
-                </Field>
-                <Field label="Nota / observación">
-                  <textarea className="input" rows={3} value={lead.nota || ''} onChange={e => updateItem('leads', lead.id, { nota: e.target.value })} placeholder="Notas internas sobre el contacto…" />
-                </Field>
-              </div>
-              <div>
-                <div className="overline mb-12">Tareas de seguimiento</div>
-                {tareas.map(a => (
-                  <div key={a.id} className="row gap-8" style={{ padding: '7px 0', borderBottom: '1px solid var(--line)', fontSize: 12.5 }}>
-                    <input type="checkbox" checked={!!a.done} onChange={() => updateItem('actividades', a.id, { done: !a.done })} />
-                    <div style={{ flex: 1, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
-                      {a.titulo} <span className="text-3">· {fmtDate(a.fecha)}</span>
-                    </div>
-                    <button className="btn danger sm" onClick={() => deleteItemUndo('actividades', a, 'La actividad')}>×</button>
-                  </div>
-                ))}
-                {!tareas.length && <div className="text-3" style={{ fontSize: 12, padding: '4px 0' }}>Sin tareas. Aparecerán también en Actividades.</div>}
-                <div className="mt-8" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <input className="input" placeholder="Nueva tarea…" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} />
-                  <div className="row gap-6">
-                    <input className="input" type="date" value={taskDate} onChange={e => setTaskDate(e.target.value)} />
-                    {[1, 3, 7, 14].map(n => <button key={n} className="btn sm" onClick={() => setTaskDate(addDays(n))}>+{n}d</button>)}
-                  </div>
-                  <button className="btn primary" onClick={addTask}>+ Agregar tarea</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </Page>
 
       {showForm && <LeadForm inventario={invActivo} asesores={ownerOptions} onSave={handleAddLead} onClose={() => setShowForm(false)} />}
