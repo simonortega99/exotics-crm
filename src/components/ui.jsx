@@ -69,6 +69,8 @@ export function Kebab({ items }) {
 export function VehiculoInteresSelect({ inventario, value, onChange }) {
   const [otro, setOtro] = useState(!value.vehiculoId && !!value.vehiculoInteres)
   const known = inventario.some(v => v.id === value.vehiculoId)
+  // Orden alfabético por marca + modelo
+  const invOrdenado = [...inventario].sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`, 'es', { sensitivity: 'base' }))
 
   function pick(e) {
     const val = e.target.value
@@ -82,7 +84,7 @@ export function VehiculoInteresSelect({ inventario, value, onChange }) {
     <>
       <select className="select" value={selectVal} onChange={pick}>
         <option value="">— Ninguno —</option>
-        {inventario.map(v => <option key={v.id} value={v.id}>{vehName(v)}</option>)}
+        {invOrdenado.map(v => <option key={v.id} value={v.id}>{vehName(v)}{v.placa ? ` · ${v.placa}` : ''}</option>)}
         {value.vehiculoId && !known && <option value={value.vehiculoId}>{value.vehiculoInteres || 'Vehículo'} (no disponible)</option>}
         <option value="__otro__">Otro (especificar)…</option>
       </select>
