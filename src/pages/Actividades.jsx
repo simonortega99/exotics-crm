@@ -128,7 +128,7 @@ export default function Actividades() {
         </div>
 
         {vista === 'calendario' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+          <div className="split cal">
             <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} onEventClick={id => updateItem('actividades', id, { done: !base.find(a => a.id === id)?.done })} /></div>
             <div className="card" style={{ alignSelf: 'start' }}>
               <div className="row between mb-12">

@@ -319,7 +319,9 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
    ============================================================ */
 .table-wrap {
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r); box-shadow: var(--shadow-sm); overflow: hidden;
+  border-radius: var(--r); box-shadow: var(--shadow-sm);
+  overflow-x: auto; /* en pantallas angostas la tabla se desliza en vez de recortarse */
+  -webkit-overflow-scrolling: touch;
 }
 table.data { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 table.data thead th {
@@ -498,10 +500,30 @@ table.data td .muted { color: var(--text-3); }
 /* ============================================================
    RESPONSIVE
    ============================================================ */
+/* Layouts de dos paneles (colapsan a 1 columna en móvil) */
+.split { display: grid; gap: 16px; }
+.split.cal { grid-template-columns: minmax(0, 1fr) 320px; }
+.split.even { grid-template-columns: 1fr 1fr; }
+.split.wide { grid-template-columns: 1fr 1.3fr; }
+.split > * { min-width: 0; } /* evita que un hijo (tabla/calendario) desborde la rejilla */
+
 @media (max-width: 900px) {
   :root { --sidebar-w: 64px; }
   .sidebar-logo .title, .sidebar-logo .sub, .nav-section, .nav-item span, .nav-badge { display: none; }
   .nav-item { justify-content: center; padding: 11px 0; }
   .topbar { padding: 0 16px; }
   .page { padding: 18px 16px 40px; }
+}
+
+/* Ajustes para teléfono */
+@media (max-width: 760px) {
+  /* Formularios: los pares de campos se apilan */
+  .form-grid.cols-2, .form-grid.cols-3 { grid-template-columns: 1fr; }
+  /* Paneles dobles a una sola columna */
+  .split.cal, .split.even, .split.wide { grid-template-columns: 1fr; }
+  /* Las tablas conservan ancho legible y se deslizan horizontalmente */
+  table.data { min-width: 640px; }
+  /* Título del topbar un poco más compacto */
+  .topbar-title { font-size: 19px; }
+  .modal-body { padding: 16px; }
 }

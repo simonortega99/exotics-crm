@@ -90,7 +90,7 @@ export default function Citas() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+        <div className="split cal">
           <div className="card">
             <Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} onDayDoubleClick={d => { setSelDay(d); setDayModal(d) }} />
             <div className="text-3 mt-8" style={{ fontSize: 11 }}>Doble clic en un día para ver y gestionar sus citas.</div>

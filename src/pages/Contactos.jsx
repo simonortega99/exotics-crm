@@ -159,7 +159,7 @@ export default function Contactos() {
                                 <button className="btn sm" onClick={() => setSelected(null)}>Cerrar</button>
                               </div>
                             </div>
-                            <div style={{ padding: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                            <div className="split even" style={{ padding: 18, gap: 18 }}>
                               <div>
                                 <div className="overline mb-12">Datos del contacto</div>
                                 <Field label="Rol">

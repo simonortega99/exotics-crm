@@ -83,7 +83,7 @@ export default function Fidelizacion() {
         </div>
 
         {tab === 'clientes' && <>
-        <div style={{ display: 'grid', gridTemplateColumns: selected ? '1.4fr 1fr' : '1fr', gap: 16 }}>
+        <div className={selected ? 'split even' : ''}>
           <div className="table-wrap">
             <table className="data">
               <thead>

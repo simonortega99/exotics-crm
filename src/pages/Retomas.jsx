@@ -78,7 +78,7 @@ export default function Retomas() {
                     {open && (
                       <tr>
                         <td colSpan={8} style={{ background: 'var(--surface-2)' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '6px 4px' }}>
+                          <div className="split even" style={{ gap: 20, padding: '6px 4px' }}>
                             <div>
                               <div className="overline mb-12">Desglose de inversión</div>
                               <Linea label="Valor de compra" value={fmtMoney(r.valorCompra)} />

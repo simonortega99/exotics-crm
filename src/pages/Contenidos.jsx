@@ -45,7 +45,7 @@ export default function Contenidos() {
         </div>
 
         {vista === 'calendario' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
+          <div className="split cal">
             <div className="card"><Calendar events={events} selectedDate={selDay} onSelectDay={setSelDay} /></div>
             <div className="card" style={{ alignSelf: 'start' }}>
               <div className="row between mb-12">

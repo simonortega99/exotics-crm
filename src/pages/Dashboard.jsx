@@ -165,7 +165,7 @@ export default function Dashboard() {
               <Kpi to="/inventario" label="Nuevos ingresos" value={nuevosIngresos} accent="ink" sub="carros que entraron" />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 16 }}>
+            <div className="split wide">
               <Card>
                 <div className="card-head">
                   <span className="card-title">Meta de ventas · {metaEsMensual ? 'mensual' : 'anual'}</span>
