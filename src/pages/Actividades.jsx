@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, isOverdue, inRange, weekRange, monthRange, ASESORES } from '../lib/utils.js'
 import { Topbar, Page, Card, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab } from '../components/ui.jsx'
@@ -23,6 +23,13 @@ export default function Actividades() {
   const [orden, setOrden] = useState('asc') // asc | desc
   // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
   const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
+  const filterTouched = useRef(false)
+  // Si al montar los datos aún no habían cargado, ajusta el filtro a lo del usuario
+  // en cuanto se resuelve su nombre (salvo que ya lo haya cambiado a mano).
+  useEffect(() => {
+    if (filterTouched.current) return
+    if (user?.nombre && asesores.includes(user.nombre) && ownerFilter === 'todos') setOwnerFilter(user.nombre)
+  }, [user?.nombre, asesores])
   const now = new Date()
   const [modo, setModo] = useState('rango') // rango | vencidas | pendientes
   const [desde, setDesde] = useState(monthRange(now.getFullYear(), now.getMonth() + 1)[0])
@@ -105,7 +112,7 @@ export default function Actividades() {
             <button className={vista === 'calendario' ? 'on' : ''} onClick={() => setVista('calendario')}>Calendario</button>
           </div>
           {isAdmin && (
-            <select className="select" style={{ width: 150 }} value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+            <select className="select" style={{ width: 150 }} value={ownerFilter} onChange={e => { filterTouched.current = true; setOwnerFilter(e.target.value) }}>
               <option value="todos">Todos los asesores</option>
               {asesores.map(a => <option key={a} value={a}>{a}</option>)}
             </select>

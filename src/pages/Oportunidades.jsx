@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtDate, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
@@ -29,6 +29,13 @@ export default function Oportunidades() {
   const [filtro, setFiltro] = useState('abiertas')
   // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
   const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
+  const filterTouched = useRef(false)
+  // Si al montar los datos aún no habían cargado, en cuanto se resuelve el nombre
+  // del usuario se ajusta el filtro a lo suyo (salvo que ya lo haya cambiado a mano).
+  useEffect(() => {
+    if (filterTouched.current) return
+    if (user?.nombre && asesores.includes(user.nombre) && ownerFilter === 'todos') setOwnerFilter(user.nombre)
+  }, [user?.nombre, asesores])
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const ownerOptions = isAdmin ? asesores : [user.nombre]
@@ -100,7 +107,7 @@ export default function Oportunidades() {
             {FILTROS.map(f => <button key={f.k} className={filtro === f.k ? 'on' : ''} onClick={() => setFiltro(f.k)}>{f.label}</button>)}
           </div>
           {isAdmin && (
-            <select className="select" style={{ width: 150 }} value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+            <select className="select" style={{ width: 150 }} value={ownerFilter} onChange={e => { filterTouched.current = true; setOwnerFilter(e.target.value) }}>
               <option value="todos">Todos los asesores</option>
               {asesores.map(a => <option key={a} value={a}>{a}</option>)}
             </select>

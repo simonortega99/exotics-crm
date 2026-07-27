@@ -12,6 +12,14 @@ const KEY = 'exotics_hq_user' // solo modo local
 // Dueños: siempre admin, sin importar la lista de Equipo (evita quedar bloqueado).
 const SUPER_ADMINS = ['simonortega99@gmail.com']
 
+// Mapa de respaldo correo → nombre de asesor. Sirve para que la app sepa "quién
+// eres" (y así, por ejemplo, filtrar por defecto tus oportunidades/actividades)
+// aunque la entrada en Equipo aún no tenga el correo configurado.
+// El correo del Equipo, si está, tiene prioridad sobre este mapa.
+const NOMBRE_POR_EMAIL = {
+  'simonortega99@gmail.com': 'Simón',
+}
+
 export function AuthProvider({ children }) {
   const { data } = useStore()
   const [localUser, setLocalUser] = useState(() => {
@@ -39,7 +47,10 @@ export function AuthProvider({ children }) {
       const rol = SUPER_ADMINS.includes(email.toLowerCase()) ? 'admin'
         : entry ? (entry.rol || 'asesor')
         : (withEmail.length === 0 ? 'admin' : 'asesor')
-      user = { nombre: entry?.nombre || email, email, usuario: email, rol }
+      // Nombre de asesor: 1) el de su entrada en Equipo (por correo), 2) el mapa
+      // de respaldo, 3) el correo como último recurso.
+      const nombre = entry?.nombre || NOMBRE_POR_EMAIL[email.toLowerCase()] || email
+      user = { nombre, email, usuario: email, rol }
       isAdmin = rol === 'admin'
     }
   } else if (localUser) {
