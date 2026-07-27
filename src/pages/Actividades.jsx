@@ -14,12 +14,15 @@ const calTone = a => a.done ? 'done' : (TIPO_TONE[a.tipo] || 'cyan')
 
 export default function Actividades() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
+  const { user, isAdmin } = useAuth()
+  const asesores = data.asesores || ASESORES
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [vista, setVista] = useState('lista')
   const [verHechas, setVerHechas] = useState(false)
   const [orden, setOrden] = useState('asc') // asc | desc
-  const [ownerFilter, setOwnerFilter] = useState('todos')
+  // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
+  const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
   const now = new Date()
   const [modo, setModo] = useState('rango') // rango | vencidas | pendientes
   const [desde, setDesde] = useState(monthRange(now.getFullYear(), now.getMonth() + 1)[0])
@@ -27,8 +30,6 @@ export default function Actividades() {
   const [selDay, setSelDay] = useState(today())
   const [formDate, setFormDate] = useState(today())
   const [leaving, setLeaving] = useState(() => new Set())
-  const { user, isAdmin } = useAuth()
-  const asesores = data.asesores || ASESORES
   const ownerOptions = isAdmin ? asesores : [user.nombre]
 
   // Marca como hecha: se tacha y se va con una breve animación antes de salir de la lista.

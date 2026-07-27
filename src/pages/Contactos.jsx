@@ -80,11 +80,11 @@ export default function Contactos() {
     exportarHojaXls(`Contactos_${today()}.xls`, 'Contactos · Exotics Co.', headers, rows)
     toast('Contactos exportados')
   }
-  function crearOportunidad({ vehiculoId, vehiculoInteres, valor, financiacion }) {
+  function crearOportunidad({ vehiculoId, vehiculoInteres, valor, financiacion, fecha }) {
     addItem('oportunidades', {
       contactoId: lead.id, contacto: lead.nombre,
       vehiculoInteres: vehiculoInteres || '', vehiculoId: vehiculoId || '',
-      valor: valor || '', stage: 0, estado: 'Abierta', financiacion: !!financiacion, owner: lead.owner || 'Simón', fecha: today(),
+      valor: valor || '', stage: 0, estado: 'Abierta', financiacion: !!financiacion, owner: lead.owner || 'Simón', fecha: fecha || today(),
     })
     setShowOpp(false)
     toast('Oportunidad creada · mírala en Oportunidades')
@@ -248,6 +248,7 @@ function NuevaOppModal({ lead, inventario, onSave, onClose }) {
   const [veh, setVeh] = useState({ vehiculoId: '', vehiculoInteres: '' })
   const [valor, setValor] = useState('')
   const [financiacion, setFinanciacion] = useState(false)
+  const [fecha, setFecha] = useState(today())
   function pick(next) {
     setVeh(next)
     const v = inventario.find(x => x.id === next.vehiculoId)
@@ -255,11 +256,14 @@ function NuevaOppModal({ lead, inventario, onSave, onClose }) {
   }
   return (
     <Modal title={`Nueva oportunidad · ${lead.nombre}`} onClose={onClose} width={440}
-      footer={<ModalButtons onClose={onClose} onSave={() => onSave({ ...veh, valor, financiacion })} saveLabel="Crear oportunidad" />}>
+      footer={<ModalButtons onClose={onClose} onSave={() => onSave({ ...veh, valor, financiacion, fecha })} saveLabel="Crear oportunidad" />}>
       <Field label="Vehículo de interés">
         <VehiculoInteresSelect inventario={inventario} value={veh} onChange={pick} />
       </Field>
-      <Field label="Valor estimado"><NumberInput prefix="$" value={valor} onChange={setValor} /></Field>
+      <div className="form-grid cols-2">
+        <Field label="Valor estimado"><NumberInput prefix="$" value={valor} onChange={setValor} /></Field>
+        <Field label="Fecha de creación"><input className="input" type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></Field>
+      </div>
       <label className="row gap-8" style={{ fontSize: 13, cursor: 'pointer', marginTop: 4 }}>
         <input type="checkbox" checked={financiacion} onChange={e => setFinanciacion(e.target.checked)} /> Requiere financiación
       </label>

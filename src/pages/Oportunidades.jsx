@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
+import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtDate, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
@@ -19,16 +19,17 @@ const FILTROS = [
 
 export default function Oportunidades() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
+  const { user, isAdmin } = useAuth()
+  const asesores = data.asesores || ASESORES
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [tareaOpp, setTareaOpp] = useState(null)
   const [citaOpp, setCitaOpp] = useState(null)
   const [filtro, setFiltro] = useState('abiertas')
-  const [ownerFilter, setOwnerFilter] = useState('todos')
+  // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
+  const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
-  const { user, isAdmin } = useAuth()
-  const asesores = data.asesores || ASESORES
   const ownerOptions = isAdmin ? asesores : [user.nombre]
 
   const allOps = data.oportunidades || []
@@ -110,7 +111,7 @@ export default function Oportunidades() {
         <div className="table-wrap">
           <table className="data">
             <thead>
-              <tr>{['Contacto', 'Temp.', 'Vehículo de interés', 'Valor est.', 'Etapa', 'Estado', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>{['Contacto', 'Creada', 'Temp.', 'Vehículo de interés', 'Valor est.', 'Etapa', 'Estado', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {filtered.map(o => {
@@ -118,6 +119,7 @@ export default function Oportunidades() {
                 return (
                   <tr key={o.id}>
                     <td><div className="cell-strong">{o.contacto || '—'}</div><div className="text-3" style={{ fontSize: 11 }}>{o.owner}</div></td>
+                    <td className="num text-2">{o.fecha ? fmtDate(o.fecha) : '—'}</td>
                     <td>
                       {o.contactoId
                         ? <select className="select" style={{ maxWidth: 110, color: THERMO_COLOR[thermo || 'frio'], fontWeight: 700 }} value={thermo || 'frio'} onChange={e => setTemp(o, e.target.value)}>
@@ -155,7 +157,7 @@ export default function Oportunidades() {
                   </tr>
                 )
               })}
-              {!filtered.length && <EmptyRow colSpan={8}><div className="big">Sin oportunidades</div>Crea una desde aquí o desde la ficha de un contacto.</EmptyRow>}
+              {!filtered.length && <EmptyRow colSpan={9}><div className="big">Sin oportunidades</div>Crea una desde aquí o desde la ficha de un contacto.</EmptyRow>}
             </tbody>
           </table>
         </div>
@@ -176,7 +178,7 @@ export default function Oportunidades() {
 }
 
 function OppForm({ leads, asesores, inventario, onSave, onClose }) {
-  const [form, setForm] = useState({ contactoId: '', vehiculoId: '', vehiculoInteres: '', valor: '', stage: 0, owner: asesores[0] || 'Simón', financiacion: false })
+  const [form, setForm] = useState({ contactoId: '', vehiculoId: '', vehiculoInteres: '', valor: '', stage: 0, owner: asesores[0] || 'Simón', financiacion: false, fecha: today() })
   const set = (k, v) => setForm({ ...form, [k]: v })
 
   function save() {
@@ -185,7 +187,7 @@ function OppForm({ leads, asesores, inventario, onSave, onClose }) {
       contactoId: form.contactoId, contacto: contacto?.nombre || '',
       vehiculoId: form.vehiculoId, vehiculoInteres: form.vehiculoInteres,
       valor: form.valor, stage: +form.stage, estado: 'Abierta', financiacion: form.financiacion,
-      owner: form.owner, fecha: today(),
+      owner: form.owner, fecha: form.fecha || today(),
     })
   }
 
@@ -212,12 +214,13 @@ function OppForm({ leads, asesores, inventario, onSave, onClose }) {
         <Field label="Owner">
           <select className="select" value={form.owner} onChange={e => set('owner', e.target.value)}>{asesores.map(a => <option key={a}>{a}</option>)}</select>
         </Field>
-        <Field label="Financiación">
-          <label className="row gap-8" style={{ height: 38, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={form.financiacion} onChange={e => set('financiacion', e.target.checked)} /> Solicita financiación
-          </label>
-        </Field>
+        <Field label="Fecha de creación"><input className="input" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} /></Field>
       </div>
+      <Field label="Financiación">
+        <label className="row gap-8" style={{ height: 38, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.financiacion} onChange={e => set('financiacion', e.target.checked)} /> Solicita financiación
+        </label>
+      </Field>
     </Modal>
   )
 }
@@ -267,7 +270,7 @@ function TareaModal({ opp, onSave, onClose }) {
 function OppEditForm({ op, asesores, inventario, onSave, onClose }) {
   const [form, setForm] = useState({
     vehiculoId: op.vehiculoId || '', vehiculoInteres: op.vehiculoInteres || '',
-    valor: op.valor || '', stage: +op.stage || 0, owner: op.owner || 'Simón', financiacion: !!op.financiacion,
+    valor: op.valor || '', stage: +op.stage || 0, owner: op.owner || 'Simón', financiacion: !!op.financiacion, fecha: op.fecha || today(),
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
   return (
@@ -287,12 +290,13 @@ function OppEditForm({ op, asesores, inventario, onSave, onClose }) {
         <Field label="Owner">
           <select className="select" value={form.owner} onChange={e => set('owner', e.target.value)}>{asesores.map(a => <option key={a}>{a}</option>)}</select>
         </Field>
-        <Field label="Financiación">
-          <label className="row gap-8" style={{ height: 38, fontSize: 13, cursor: 'pointer' }}>
-            <input type="checkbox" checked={form.financiacion} onChange={e => set('financiacion', e.target.checked)} /> Solicita financiación
-          </label>
-        </Field>
+        <Field label="Fecha de creación"><input className="input" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} /></Field>
       </div>
+      <Field label="Financiación">
+        <label className="row gap-8" style={{ height: 38, fontSize: 13, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.financiacion} onChange={e => set('financiacion', e.target.checked)} /> Solicita financiación
+        </label>
+      </Field>
     </Modal>
   )
 }
