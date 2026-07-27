@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtDate, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
@@ -25,6 +25,7 @@ export default function Oportunidades() {
   const [editing, setEditing] = useState(null)
   const [tareaOpp, setTareaOpp] = useState(null)
   const [citaOpp, setCitaOpp] = useState(null)
+  const [openId, setOpenId] = useState(null)
   const [filtro, setFiltro] = useState('abiertas')
   // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
   const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
@@ -44,6 +45,10 @@ export default function Oportunidades() {
     if (acts.some(a => isOverdue(a.fecha))) return { label: 'Sin seguimiento', tone: 'red' }
     return { label: 'Al día', tone: 'green' }
   }
+  // Actividades pendientes ligadas a una oportunidad (por la opp o por su contacto).
+  const pendientesDe = o => (data.actividades || [])
+    .filter(a => !a.done && (a.oppId === o.id || a.leadId === o.contactoId))
+    .sort((a, b) => (a.fecha > b.fecha ? 1 : -1))
   const enRango = o => (!desde && !hasta) || inRange(o.fecha, desde || null, hasta || null)
   const abiertas = ops.filter(o => o.estado === 'Abierta' && enRango(o))
 
@@ -116,9 +121,15 @@ export default function Oportunidades() {
             <tbody>
               {filtered.map(o => {
                 const thermo = thermoOf(o)
+                const pend = pendientesDe(o)
+                const open = openId === o.id
                 return (
-                  <tr key={o.id}>
-                    <td><div className="cell-strong">{o.contacto || '—'}</div><div className="text-3" style={{ fontSize: 11 }}>{o.owner}</div></td>
+                  <Fragment key={o.id}>
+                  <tr className={open ? 'selected' : ''}>
+                    <td onClick={() => setOpenId(open ? null : o.id)} style={{ cursor: 'pointer' }}>
+                      <div className="cell-strong">{o.contacto || '—'} <span className="text-3">{pend.length ? (open ? '▾' : '▸') : ''}</span></div>
+                      <div className="text-3" style={{ fontSize: 11 }}>{o.owner}{pend.length ? ` · ${pend.length} pend.` : ''}</div>
+                    </td>
                     <td className="num text-2">{o.fecha ? fmtDate(o.fecha) : '—'}</td>
                     <td>
                       {o.contactoId
@@ -155,6 +166,24 @@ export default function Oportunidades() {
                       </div>
                     </td>
                   </tr>
+                  {open && (
+                    <tr>
+                      <td colSpan={9} style={{ background: 'var(--surface-2)' }}>
+                        <div className="row between mb-8" style={{ alignItems: 'center' }}>
+                          <span className="overline">Actividades pendientes</span>
+                          {o.contactoId && <button className="btn cyan sm" onClick={() => setTareaOpp(o)}>+ Agendar tarea</button>}
+                        </div>
+                        {pend.length ? pend.map(a => (
+                          <div key={a.id} className="row gap-8" style={{ padding: '7px 2px', borderBottom: '1px solid var(--line)', fontSize: 12.5, alignItems: 'center' }}>
+                            <input type="checkbox" checked={!!a.done} onChange={() => updateItem('actividades', a.id, { done: !a.done })} />
+                            <span style={{ flex: 1 }}>{a.titulo} <span className="text-3">· {a.tipo}</span></span>
+                            <span className={isOverdue(a.fecha) ? 't-red' : 'text-3'} style={{ fontSize: 11.5 }}>{fmtDate(a.fecha)}{isOverdue(a.fecha) ? ' · vencida' : ''}</span>
+                          </div>
+                        )) : <div className="text-3" style={{ fontSize: 12.5, padding: '4px 2px' }}>Sin actividades pendientes. Usa "+ Agendar tarea" para crear una.</div>}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
               {!filtered.length && <EmptyRow colSpan={9}><div className="big">Sin oportunidades</div>Crea una desde aquí o desde la ficha de un contacto.</EmptyRow>}
