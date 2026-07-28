@@ -18,6 +18,7 @@ const SUPER_ADMINS = ['simonortega99@gmail.com']
 // El correo del Equipo, si está, tiene prioridad sobre este mapa.
 const NOMBRE_POR_EMAIL = {
   'simonortega99@gmail.com': 'Simón',
+  'rpatinov1@gmail.com': 'Roberto',
 }
 
 export function AuthProvider({ children }) {

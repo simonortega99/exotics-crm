@@ -146,13 +146,17 @@ function TeamModal({ onClose }) {
       footer={<button className="btn" onClick={onClose}>Cerrar</button>}>
       <div className="text-3 mb-12" style={{ fontSize: 12 }}>
         {sb
-          ? <>Cada persona entra con su <b>email</b> y contraseña (la contraseña se gestiona en Supabase). Aquí defines el nombre y el rol por email. <b>Admins</b> ven todo; <b>asesores</b> solo lo suyo.</>
+          ? <>Cada persona entra con su <b>email</b> y contraseña (la contraseña se gestiona en Supabase). El <b>email debe ser exactamente el de su inicio de sesión</b>: así la app lo reconoce y le muestra <b>lo suyo por defecto</b> en Oportunidades y Actividades. <b>Admins</b> ven todo; <b>asesores</b> solo lo suyo.</>
           : <>Cada persona entra con su usuario y contraseña. <b>Admins</b> ven todo; <b>asesores</b> solo lo suyo.</>}
       </div>
       {equipo.map(e => (
         <div key={e.id} className="card" style={{ background: 'var(--surface-2)', boxShadow: 'none', padding: 12, marginBottom: 10 }}>
           <div className="row between mb-12">
-            <span className="cell-strong">{e.nombre} <span className={`badge ${e.rol === 'admin' ? 'cyan' : 'gray'}`}>{e.rol}</span></span>
+            <span className="cell-strong row gap-6" style={{ flexWrap: 'wrap' }}>
+              {e.nombre}
+              <span className={`badge ${e.rol === 'admin' ? 'cyan' : 'gray'}`}>{e.rol}</span>
+              {sb && !((e.email || '').trim()) && <span className="badge amber">sin vincular</span>}
+            </span>
             <button className="btn danger sm" onClick={() => remove(e)}><X size={13} /> Quitar</button>
           </div>
           <div className="form-grid cols-2">
