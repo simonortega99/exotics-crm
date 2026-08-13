@@ -16,6 +16,7 @@ const Inventario = lazy(() => import('./pages/Inventario.jsx'))
 const Retomas = lazy(() => import('./pages/Retomas.jsx'))
 const Busquedas = lazy(() => import('./pages/Busquedas.jsx'))
 const Ventas = lazy(() => import('./pages/Ventas.jsx'))
+const Entregas = lazy(() => import('./pages/Entregas.jsx'))
 const Fidelizacion = lazy(() => import('./pages/Fidelizacion.jsx'))
 const Actividades = lazy(() => import('./pages/Actividades.jsx'))
 const Citas = lazy(() => import('./pages/Citas.jsx'))
@@ -38,6 +39,7 @@ function Shell() {
               <Route path="/retomas" element={<Retomas />} />
               <Route path="/busquedas" element={<Busquedas />} />
               <Route path="/ventas" element={<Ventas />} />
+              <Route path="/entregas" element={<Entregas />} />
               <Route path="/fidelizacion" element={<Fidelizacion />} />
               <Route path="/actividades" element={<Actividades />} />
               <Route path="/citas" element={<Citas />} />

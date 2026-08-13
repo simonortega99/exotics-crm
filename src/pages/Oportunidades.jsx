@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
+import { GripVertical } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtDate, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
@@ -26,6 +27,8 @@ export default function Oportunidades() {
   const [tareaOpp, setTareaOpp] = useState(null)
   const [citaOpp, setCitaOpp] = useState(null)
   const [openId, setOpenId] = useState(null)
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
   const [filtro, setFiltro] = useState('abiertas')
   // Por defecto cada quien ve lo suyo (si su nombre está en el equipo); si no, todos.
   const [ownerFilter, setOwnerFilter] = useState(() => asesores.includes(user?.nombre) ? user.nombre : 'todos')
@@ -66,6 +69,28 @@ export default function Oportunidades() {
     if (ownerFilter !== 'todos') base = base.filter(o => o.owner === ownerFilter)
     return base.filter(enRango)
   }, [ops, filtro, ownerFilter, desde, hasta, data.leads])
+
+  // Orden manual: las que tienen `orden` van primero (ascendente); el resto por
+  // fecha (más nuevas arriba), como siempre, hasta que se arrastren.
+  const sorted = useMemo(() => [...filtered].sort((a, b) => {
+    const ao = a.orden, bo = b.orden
+    if (ao != null && bo != null) return ao - bo
+    if (ao != null) return -1
+    if (bo != null) return 1
+    return a.fecha < b.fecha ? 1 : -1
+  }), [filtered])
+
+  // Reordena: coloca la arrastrada donde se soltó y reescribe `orden` de la lista visible.
+  function reordenar(targetId) {
+    const list = [...sorted]
+    const from = list.findIndex(o => o.id === dragId)
+    const to = list.findIndex(o => o.id === targetId)
+    setDragId(null); setOverId(null)
+    if (from < 0 || to < 0 || from === to) return
+    const [moved] = list.splice(from, 1)
+    list.splice(to, 0, moved)
+    list.forEach((o, i) => { if (o.orden !== i) updateItem('oportunidades', o.id, { orden: i }) })
+  }
 
   function perder(o) {
     updateItem('oportunidades', o.id, { estado: 'Perdida' })
@@ -126,16 +151,24 @@ export default function Oportunidades() {
               <tr>{['Contacto', 'Creada', 'Temp.', 'Vehículo de interés', 'Valor est.', 'Etapa', 'Estado', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
-              {filtered.map(o => {
+              {sorted.map(o => {
                 const thermo = thermoOf(o)
                 const pend = pendientesDe(o)
                 const open = openId === o.id
+                const isOver = overId === o.id && dragId && dragId !== o.id
                 return (
                   <Fragment key={o.id}>
-                  <tr className={open ? 'selected' : ''}>
+                  <tr className={open ? 'selected' : ''}
+                    onDragOver={e => { if (dragId) { e.preventDefault(); if (overId !== o.id) setOverId(o.id) } }}
+                    onDrop={() => reordenar(o.id)}
+                    style={{ boxShadow: isOver ? 'inset 0 2px 0 var(--cyan)' : undefined, opacity: dragId === o.id ? .4 : 1 }}>
                     <td onClick={() => setOpenId(open ? null : o.id)} style={{ cursor: 'pointer' }}>
-                      <div className="cell-strong">{o.contacto || '—'} <span className="text-3">{pend.length ? (open ? '▾' : '▸') : ''}</span></div>
-                      <div className="text-3" style={{ fontSize: 11 }}>{o.owner}{pend.length ? ` · ${pend.length} pend.` : ''}</div>
+                      <div className="cell-strong" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span draggable onDragStart={e => { e.stopPropagation(); setDragId(o.id) }} onDragEnd={() => { setDragId(null); setOverId(null) }} onClick={e => e.stopPropagation()}
+                          title="Arrastra para reordenar" style={{ cursor: 'grab', display: 'inline-flex', color: 'var(--text-3)', flexShrink: 0 }}><GripVertical size={13} /></span>
+                        {o.contacto || '—'} <span className="text-3">{pend.length ? (open ? '▾' : '▸') : ''}</span>
+                      </div>
+                      <div className="text-3" style={{ fontSize: 11, paddingLeft: 17 }}>{o.owner}{pend.length ? ` · ${pend.length} pend.` : ''}</div>
                     </td>
                     <td className="num text-2">{o.fecha ? fmtDate(o.fecha) : '—'}</td>
                     <td>

@@ -49,15 +49,23 @@ export default function Ventas() {
     const vehiculo = data.inventario.find(v => v.id === form.vehiculoId)
     const cliente = data.leads.find(l => l.id === form.clienteId)
     const diasVenta = vehiculo?.fechaIngreso ? daysSince(vehiculo.fechaIngreso) : 0
-    addItem('ventas', {
+    const vehName = vehiculo ? `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio || ''}`.trim() : (form.vehiculoLibre || '')
+    const venta = addItem('ventas', {
       fecha: form.fecha,
-      vehiculo: vehiculo ? `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio || ''}`.trim() : (form.vehiculoLibre || ''),
+      vehiculo: vehName,
       vehiculoId: form.vehiculoId || '', cliente: cliente?.nombre || '', clienteId: form.clienteId || '',
       precio: num(form.precio), comisionPct: form.comisionPct, comision: num(form.comision),
       ganancia: num(form.ganancia) || num(form.comision), owner: form.owner || 'Simón',
       fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota || '',
       referido: form.referido || '', comisionReferidoPct: form.comisionReferidoPct || '', comisionReferido: num(form.comisionReferido),
       diasVenta, esAliado: !vehiculo,
+    })
+    // Toda venta genera una entrega con su checklist (módulo Entregas).
+    addItem('entregas', {
+      ventaId: venta.id, vehiculoId: form.vehiculoId || '', vehiculo: vehName,
+      clienteId: form.clienteId || '', cliente: cliente?.nombre || '', owner: form.owner || 'Simón',
+      placa: vehiculo?.placa || '', motor: vehiculo?.motor || '', fechaVenta: form.fecha,
+      checklist: {}, entregaFecha: '', entregaHora: '', entregaLugar: '', estado: 'En proceso',
     })
     if (vehiculo) updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
     if (cliente) {

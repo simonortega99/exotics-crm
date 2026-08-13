@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Calendar, CalendarClock, Users, Target, Filter, Car, ArrowLeftRight,
-  Search, Receipt, Heart, UsersRound, LogOut, X, Plus,
+  Search, Receipt, Heart, UsersRound, LogOut, X, Plus, PackageCheck,
 } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
@@ -25,6 +25,7 @@ const NAV = [
     { to: '/retomas', label: 'Retomas', icon: ArrowLeftRight },
     { to: '/busquedas', label: 'Búsquedas', icon: Search },
     { to: '/ventas', label: 'Ventas', icon: Receipt },
+    { to: '/entregas', label: 'Entregas', icon: PackageCheck },
   ]},
   { section: 'Relación', items: [
     { to: '/fidelizacion', label: 'Fidelización', icon: Heart, badge: 'fid' },

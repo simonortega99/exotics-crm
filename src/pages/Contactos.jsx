@@ -64,9 +64,18 @@ export default function Contactos() {
   const arrow = campo => sort.campo === campo ? (sort.dir === 'asc' ? ' ↑' : ' ↓') : ''
 
   function handleAddLead(form) {
-    addItem('leads', { ...form, fechaCreacion: today() })
+    const { crearOpp, oppVehiculoId, oppVehiculoInteres, oppValor, ...leadData } = form
+    const nuevo = addItem('leads', { ...leadData, fechaCreacion: today() })
+    if (crearOpp && nuevo) {
+      addItem('oportunidades', {
+        contactoId: nuevo.id, contacto: nuevo.nombre,
+        vehiculoId: oppVehiculoId || '', vehiculoInteres: oppVehiculoInteres || '',
+        valor: oppValor || '', stage: 0, estado: 'Abierta', financiacion: false,
+        owner: nuevo.owner || 'Simón', fecha: today(),
+      })
+    }
     setShowForm(false)
-    toast('Contacto agregado')
+    toast(crearOpp ? 'Contacto y oportunidad creados' : 'Contacto agregado')
   }
   function addTask() {
     if (!taskTitle || !taskDate || !lead) return
@@ -272,7 +281,7 @@ function NuevaOppModal({ lead, inventario, onSave, onClose }) {
 }
 
 function LeadForm({ inventario, asesores, onSave, onClose }) {
-  const [form, setForm] = useState({ nombre: '', tel: '', email: '', instagram: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '' })
+  const [form, setForm] = useState({ nombre: '', tel: '', email: '', instagram: '', cumple: '', rol: 'lead', owner: asesores[0] || 'Simón', thermo: 'frio', stage: 0, vehiculoPropio: '', vehiculoConsignadoId: '', vehiculoConsignado: '', nota: '', crearOpp: false, oppVehiculoId: '', oppVehiculoInteres: '', oppValor: '' })
   const set = (k, v) => setForm({ ...form, [k]: v })
   return (
     <Modal title="Nuevo contacto" onClose={onClose} width={440}
@@ -315,6 +324,22 @@ function LeadForm({ inventario, asesores, onSave, onClose }) {
       <Field label="Nota / observación">
         <textarea className="input" rows={2} value={form.nota} onChange={e => set('nota', e.target.value)} placeholder="Opcional" />
       </Field>
+      {form.rol === 'lead' && (
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+          <label className="row gap-8" style={{ fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            <input type="checkbox" checked={form.crearOpp} onChange={e => set('crearOpp', e.target.checked)} /> Crear también una oportunidad para este contacto
+          </label>
+          {form.crearOpp && (
+            <div style={{ marginTop: 10 }}>
+              <Field label="Vehículo de interés">
+                <VehiculoInteresSelect inventario={inventario} value={{ vehiculoId: form.oppVehiculoId, vehiculoInteres: form.oppVehiculoInteres }}
+                  onChange={({ vehiculoId, vehiculoInteres }) => setForm(f => ({ ...f, oppVehiculoId: vehiculoId, oppVehiculoInteres: vehiculoInteres }))} />
+              </Field>
+              <Field label="Valor estimado"><NumberInput prefix="$" value={form.oppValor} onChange={v => set('oppValor', v)} placeholder="Opcional" /></Field>
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   )
 }

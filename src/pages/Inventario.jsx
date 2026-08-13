@@ -1,6 +1,6 @@
 import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias } from '../lib/utils.js'
+import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, FUENTES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { Download } from 'lucide-react'
@@ -100,6 +100,7 @@ export default function Inventario() {
                         {(v.placa || v.motor) && <div className="text-3" style={{ fontSize: 11 }}>{[v.placa && `Placa: ${v.placa}`, v.motor].filter(Boolean).join(' · ')}</div>}
                         <PicoPlacaLinea placa={v.placa} motor={v.motor} config={data.picoPlaca} />
                         {v.contactoNombre && <div className="text-3" style={{ fontSize: 11 }}>{v.tipo === 'Aliado' ? 'Aliado' : 'Consignante'}: {v.contactoNombre}</div>}
+                        {v.tipo === 'Consignación' && v.fuente && <div className="text-3" style={{ fontSize: 11 }}>Fuente: {v.fuente}</div>}
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
                       </td>
                       <td className="num">{v.anio || '—'}</td>
@@ -209,7 +210,7 @@ function DatoVenta({ label, valor }) {
 function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || {
     marca: '', modelo: '', anio: '', placa: '', motor: 'Gasolina', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
-    fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '',
+    fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '', fuente: '',
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
   const needsLink = linkTipos.includes(form.tipo)
@@ -245,6 +246,14 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
             {leadsLink.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
           </select>
           {!leadsLink.length && <div className="text-3" style={{ fontSize: 11, marginTop: 4 }}>No hay contactos con rol "{linkRol}". Créalos en Contactos.</div>}
+        </Field>
+      )}
+      {form.tipo === 'Consignación' && (
+        <Field label="Fuente (¿de dónde llegó la consignación?)">
+          <select className="select" value={form.fuente || ''} onChange={e => set('fuente', e.target.value)}>
+            <option value="">— Sin especificar —</option>
+            {FUENTES.map(f => <option key={f}>{f}</option>)}
+          </select>
         </Field>
       )}
       <div className="form-grid cols-2">

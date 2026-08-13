@@ -9,7 +9,7 @@ import { ArrowUpDown } from 'lucide-react'
 
 const TIPOS = ['Llamada', 'WhatsApp', 'Visita', 'Email', 'Seguimiento', 'Fidelización', 'Cita', 'Otro']
 // Color por tipo de actividad
-const TIPO_TONE = { Fidelización: 'violet', Seguimiento: 'cyan', Cita: 'amber', Llamada: 'gray', WhatsApp: 'green', Visita: 'amber', Email: 'gray', Otro: 'gray' }
+const TIPO_TONE = { Fidelización: 'violet', Seguimiento: 'cyan', Cita: 'amber', Entrega: 'green', Llamada: 'gray', WhatsApp: 'green', Visita: 'amber', Email: 'gray', Otro: 'gray' }
 const calTone = a => a.done ? 'done' : (TIPO_TONE[a.tipo] || 'cyan')
 
 export default function Actividades() {
