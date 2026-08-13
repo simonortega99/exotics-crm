@@ -14,6 +14,20 @@ export function thermoForStage(stage) {
   return 'frio'                      // Nuevo lead / Información enviada
 }
 export const TIPOS_VEHICULO = ['Propio', 'Consignación', 'Aliado', 'Retoma']
+// Fuente de origen (de dónde llegó un lead, una consignación, una venta…)
+export const FUENTES = ['Directo', 'Referido', 'Instagram', 'TikTok', 'Mercado Libre', 'WhatsApp', 'Marketplace', 'Otro']
+// Para crédito / seguro en una venta
+export const SI_NO_TERCERO = ['No', 'Sí', 'Tercero']
+// Checklist de una entrega, en orden. `programada` se marca al agendar la entrega.
+export const ENTREGA_CHECKLIST = [
+  { key: 'documentos', label: 'Documentos firmados' },
+  { key: 'traspasoPagado', label: 'Traspaso pagado' },
+  { key: 'pagoVehiculo', label: 'Pago de vehículo realizado' },
+  { key: 'revisado', label: 'Vehículo revisado' },
+  { key: 'traspasado', label: 'Vehículo traspasado' },
+  { key: 'programada', label: 'Programación de entrega' },
+  { key: 'entregado', label: 'Vehículo entregado' },
+]
 export const MOTORES = ['Gasolina', 'Híbrido', 'Eléctrico', 'Diésel']
 export const DIAS_LV = [['1', 'Lunes'], ['2', 'Martes'], ['3', 'Miércoles'], ['4', 'Jueves'], ['5', 'Viernes']]
 export const ESTADOS_VEHICULO = ['Disponible', 'Reservado', 'Vendido']

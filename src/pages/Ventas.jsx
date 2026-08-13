@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import {
   fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, daysSince, num, ASESORES, MESES, ymOf,
-  inRange, monthRange, yearRange, ytdRange, shiftYear, addMonths, nextBirthdayDate,
+  inRange, monthRange, yearRange, ytdRange, shiftYear, addMonths, nextBirthdayDate, SI_NO_TERCERO,
 } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
@@ -17,7 +17,6 @@ function metrics(arr) {
 }
 const pctDelta = (cur, prev) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null)
 const FUENTES = ['Directo', 'Instagram', 'Referido', 'Mercado Libre', 'VTN', 'Otro']
-const ORIGEN_CREDITO = ['Ninguno', 'Propio', 'Tercero']
 
 export default function Ventas() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
@@ -202,9 +201,9 @@ export default function Ventas() {
                   <td className="text-2">{v.owner || '—'}</td>
                   <td className="text-2">
                     {v.fuente || '—'}
-                    {((v.credito && v.credito !== 'Ninguno') || (v.seguro && v.seguro !== 'Ninguno')) && (
+                    {((v.credito && v.credito !== 'No') || (v.seguro && v.seguro !== 'No')) && (
                       <div className="text-3" style={{ fontSize: 10 }}>
-                        {[v.credito && v.credito !== 'Ninguno' && `Créd: ${v.credito}`, v.seguro && v.seguro !== 'Ninguno' && `Seg: ${v.seguro}`].filter(Boolean).join(' · ')}
+                        {[v.credito && v.credito !== 'No' && `Créd: ${v.credito}`, v.seguro && v.seguro !== 'No' && `Seg: ${v.seguro}`].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {v.referido && (
@@ -243,7 +242,7 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
   const [form, setForm] = useState({
     fecha: venta.fecha || today(), owner: venta.owner || asesores[0] || 'Simón',
     clienteId: venta.clienteId || '', precio: venta.precio || '', comisionPct: venta.comisionPct || '', comision: venta.comision || '', ganancia: venta.ganancia || '',
-    fuente: venta.fuente || 'Directo', credito: venta.credito || 'Ninguno', seguro: venta.seguro || 'Ninguno', nota: venta.nota || '',
+    fuente: venta.fuente || 'Directo', credito: venta.credito || 'No', seguro: venta.seguro || 'No', nota: venta.nota || '',
     referido: venta.referido || '', comisionReferidoPct: venta.comisionReferidoPct || '', comisionReferido: venta.comisionReferido || '',
   })
   // Actualización funcional: evita pisar campos si se cambian varios seguidos.
@@ -294,8 +293,8 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
         <select className="select" value={form.fuente} onChange={e => set('fuente', e.target.value)}>{FUENTES.map(f => <option key={f}>{f}</option>)}</select>
       </Field>
       <div className="form-grid cols-2">
-        <Field label="Crédito"><select className="select" value={form.credito} onChange={e => set('credito', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
-        <Field label="Seguro"><select className="select" value={form.seguro} onChange={e => set('seguro', e.target.value)}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select></Field>
+        <Field label="Crédito"><select className="select" value={form.credito} onChange={e => set('credito', e.target.value)}>{SI_NO_TERCERO.map(o => <option key={o}>{o}</option>)}</select></Field>
+        <Field label="Seguro"><select className="select" value={form.seguro} onChange={e => set('seguro', e.target.value)}>{SI_NO_TERCERO.map(o => <option key={o}>{o}</option>)}</select></Field>
       </div>
       <ReferidoFields form={form} setForm={setForm} setRefPct={setRefPct} />
       <Field label="Nota / comentarios"><textarea className="input" rows={2} value={form.nota} onChange={e => set('nota', e.target.value)} placeholder="Opcional" /></Field>
@@ -337,7 +336,7 @@ function CompareRow({ label, a, b, fmt }) {
 }
 
 function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
-  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'Ninguno', seguro: 'Ninguno', nota: '', referido: '', comisionReferidoPct: '', comisionReferido: '' })
+  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'No', seguro: 'No', nota: '', referido: '', comisionReferidoPct: '', comisionReferido: '' })
 
   const invOrdenado = [...inventario].sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`, 'es', { sensitivity: 'base' }))
 
@@ -391,10 +390,10 @@ function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
       </Field>
       <div className="form-grid cols-2">
         <Field label="Crédito">
-          <select className="select" value={form.credito} onChange={e => setForm({ ...form, credito: e.target.value })}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select>
+          <select className="select" value={form.credito} onChange={e => setForm({ ...form, credito: e.target.value })}>{SI_NO_TERCERO.map(o => <option key={o}>{o}</option>)}</select>
         </Field>
         <Field label="Seguro">
-          <select className="select" value={form.seguro} onChange={e => setForm({ ...form, seguro: e.target.value })}>{ORIGEN_CREDITO.map(o => <option key={o}>{o}</option>)}</select>
+          <select className="select" value={form.seguro} onChange={e => setForm({ ...form, seguro: e.target.value })}>{SI_NO_TERCERO.map(o => <option key={o}>{o}</option>)}</select>
         </Field>
       </div>
       <ReferidoFields form={form} setForm={setForm} setRefPct={setRefPct} />

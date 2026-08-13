@@ -21,12 +21,12 @@ import { toast } from '../components/feedback.jsx'
 
 const STORAGE_KEY = 'exotics_hq_data'
 
-const ARRAY_COLLECTIONS = ['leads', 'oportunidades', 'inventario', 'retomas', 'busquedas', 'ventas', 'actividades', 'fidelidad', 'contenidos', 'finanzas', 'citas']
+const ARRAY_COLLECTIONS = ['leads', 'oportunidades', 'inventario', 'retomas', 'busquedas', 'ventas', 'actividades', 'fidelidad', 'contenidos', 'finanzas', 'citas', 'entregas']
 const SETTINGS_KEYS = ['asesores', 'equipo', 'fidelidadPlantillas', 'fidelidadTipos', 'meta', 'metaAnual', 'metaTipo', 'picoPlaca', 'redes', '_migratedOpps', '_unifiedActivities']
 
 const initialState = {
   leads: [], oportunidades: [], inventario: [], retomas: [], busquedas: [], ventas: [],
-  fidelidad: [], actividades: [], citas: [], contenidos: [], finanzas: [],
+  fidelidad: [], actividades: [], citas: [], contenidos: [], finanzas: [], entregas: [],
   picoPlaca: { 1: [], 2: [], 3: [], 4: [], 5: [] },
   asesores: ['Simón', 'Roberto'],
   equipo: [
