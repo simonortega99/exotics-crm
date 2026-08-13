@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
-import { ENTREGA_CHECKLIST, fmtDate, today, picoPlacaRestringido, uid } from '../lib/utils.js'
+import { ENTREGA_CHECKLIST, fmtDate, today, addDays, isOverdue, picoPlacaRestringido, uid } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { calCrearEntrega, calActualizarEntrega, calEliminarEntrega } from '../lib/calendar.js'
@@ -13,6 +13,7 @@ export default function Entregas() {
   const { data, addItem, updateItem, deleteItem, restoreItem } = useStore()
   const { user, isAdmin } = useAuth()
   const [prog, setProg] = useState(null)      // entrega a programar
+  const [actModal, setActModal] = useState(null) // { entrega, actividad? }
   const [filtro, setFiltro] = useState('proceso') // proceso | entregadas | todas
 
   const picoPlaca = data.picoPlaca || {}
@@ -56,6 +57,31 @@ export default function Entregas() {
     if (e.actId) deleteItem('actividades', e.actId)
     calEliminarEntrega(e)
     toast('Entrega eliminada', 'info', { label: 'Deshacer', fn: () => { restoreItem('entregas', e); if (act) restoreItem('actividades', act) } })
+  }
+
+  // Actividades adicionales de la entrega (excluye la de la programación, que se
+  // gestiona con "Reprogramar" para mantener sincronizado Google Calendar).
+  const actividadesDe = e => (data.actividades || [])
+    .filter(a => a.entregaId === e.id && a.id !== e.actId)
+    .sort((a, b) => (a.fecha > b.fecha ? 1 : -1))
+
+  function guardarActividad(f) {
+    const { entrega, actividad } = actModal
+    if (actividad) {
+      updateItem('actividades', actividad.id, { titulo: f.titulo, fecha: f.fecha })
+    } else {
+      addItem('actividades', { titulo: f.titulo, fecha: f.fecha, tipo: 'Entrega', owner: entrega.owner || '', lead: entrega.cliente || '', vehiculo: entrega.vehiculo || '', entregaId: entrega.id, done: false })
+    }
+    setActModal(null)
+    toast(actividad ? 'Actividad actualizada' : 'Actividad agregada · visible en Actividades')
+  }
+  function eliminarActividad(a) {
+    deleteItem('actividades', a.id)
+    toast('Actividad eliminada', 'info', { label: 'Deshacer', fn: () => restoreItem('actividades', a) })
+  }
+  function marcarEntregado(e) {
+    const entregado = !(e.checklist?.entregado)
+    updateItem('entregas', e.id, { checklist: { ...(e.checklist || {}), entregado }, estado: entregado ? 'Entregado' : 'En proceso' })
   }
 
   return (
@@ -108,13 +134,34 @@ export default function Entregas() {
                 })}
               </div>
 
+              <div style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+                <div className="row between mb-8" style={{ alignItems: 'center' }}>
+                  <span className="overline">Actividades</span>
+                  <button className="btn sm" onClick={() => setActModal({ entrega: e })}>+ Agregar actividad</button>
+                </div>
+                {actividadesDe(e).map(a => (
+                  <div key={a.id} className="row gap-8" style={{ padding: '5px 0', fontSize: 12.5, alignItems: 'center' }}>
+                    <input type="checkbox" checked={!!a.done} onChange={() => updateItem('actividades', a.id, { done: !a.done })} />
+                    <span style={{ flex: 1, minWidth: 0, textDecoration: a.done ? 'line-through' : 'none', color: a.done ? 'var(--text-3)' : 'var(--text)' }}>
+                      {a.titulo} <span className={isOverdue(a.fecha) && !a.done ? 't-red' : 'text-3'}>· {fmtDate(a.fecha)}</span>
+                    </span>
+                    <button className="btn ghost sm" onClick={() => setActModal({ entrega: e, actividad: a })}>Editar</button>
+                    <button className="btn danger sm" onClick={() => eliminarActividad(a)}>×</button>
+                  </div>
+                ))}
+                {!actividadesDe(e).length && <div className="text-3" style={{ fontSize: 12 }}>Sin actividades. Agrega recordatorios o tareas de la entrega.</div>}
+              </div>
+
               <div className="row between mt-12 wrap gap-8" style={{ alignItems: 'center', borderTop: '1px solid var(--line)', paddingTop: 12 }}>
                 <div className="text-2" style={{ fontSize: 12.5 }}>
                   {e.entregaFecha
                     ? <>Entrega: <b>{fmtDate(e.entregaFecha)}{e.entregaHora ? ` · ${e.entregaHora}` : ''}</b>{e.entregaLugar ? ` · ${e.entregaLugar}` : ''} {pp && <Badge tone="red">pico y placa</Badge>}</>
                     : <span className="text-3">Sin programar</span>}
                 </div>
-                <button className="btn cyan sm" onClick={() => setProg(e)}>{e.entregaFecha ? 'Reprogramar' : 'Programar entrega'}</button>
+                <div className="row gap-6 wrap">
+                  <button className="btn cyan sm" onClick={() => setProg(e)}>{e.entregaFecha ? 'Reprogramar' : 'Programar entrega'}</button>
+                  <button className={e.checklist?.entregado ? 'btn sm' : 'btn primary sm'} onClick={() => marcarEntregado(e)}>{e.checklist?.entregado ? 'Reabrir' : '✓ Marcar entregado'}</button>
+                </div>
               </div>
             </div>
           )
@@ -127,7 +174,24 @@ export default function Entregas() {
       </Page>
 
       {prog && <ProgramarModal entrega={prog} picoPlaca={picoPlaca} onSave={guardarProgramacion} onClose={() => setProg(null)} />}
+      {actModal && <ActividadModal entrega={actModal.entrega} actividad={actModal.actividad} onSave={guardarActividad} onClose={() => setActModal(null)} />}
     </>
+  )
+}
+
+function ActividadModal({ entrega, actividad, onSave, onClose }) {
+  const [f, setF] = useState({ titulo: actividad?.titulo || '', fecha: actividad?.fecha || today() })
+  return (
+    <Modal title={actividad ? 'Editar actividad' : `Nueva actividad · ${entrega.cliente || entrega.vehiculo || ''}`} onClose={onClose} width={400}
+      footer={<ModalButtons onClose={onClose} onSave={() => onSave(f)} disabled={!f.titulo.trim()} saveLabel={actividad ? 'Guardar' : 'Agregar'} />}>
+      <Field label="Actividad"><input className="input" value={f.titulo} onChange={e => setF({ ...f, titulo: e.target.value })} placeholder="Ej. Llamar para confirmar entrega" autoFocus /></Field>
+      <Field label="Fecha">
+        <div className="row gap-6">
+          <input className="input" type="date" value={f.fecha} onChange={e => setF({ ...f, fecha: e.target.value })} />
+          {[1, 3, 7].map(n => <button key={n} className="btn sm" onClick={() => setF({ ...f, fecha: addDays(n) })}>+{n}d</button>)}
+        </div>
+      </Field>
+    </Modal>
   )
 }
 
