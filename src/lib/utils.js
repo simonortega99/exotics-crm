@@ -43,6 +43,15 @@ export const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
+// Extrae el ID de un anuncio de MercadoLibre desde una URL o texto pegado.
+// Acepta "https://articulo.mercadolibre.com.co/MCO-1234567890-..." o "MCO1234567890".
+// Devuelve el ID normalizado sin guion (MCO1234567890) o '' si no encuentra.
+export function parseMlId(text) {
+  if (!text) return ''
+  const m = String(text).toUpperCase().match(/MCO-?\d{6,}/)
+  return m ? m[0].replace('-', '') : ''
+}
+
 // Id único y estable (evita colisiones si se crean dos en el mismo ms)
 let _seq = 0
 export function uid() {

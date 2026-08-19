@@ -1,9 +1,10 @@
 import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
-import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, FUENTES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias } from '../lib/utils.js'
+import { useAuth } from '../lib/auth.jsx'
+import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, FUENTES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias, parseMlId } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
-import { Download } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
 
 const ESTADO_TONE = { Disponible: 'green', Reservado: 'amber', Vendido: 'gray' }
 const THERMO = THERMO_TONE
@@ -11,9 +12,30 @@ const linkTipos = ['Consignación', 'Aliado']
 
 export default function Inventario() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
+  const { isAdmin } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filtro, setFiltro] = useState('Activos')
+  const [syncing, setSyncing] = useState(false)
+
+  // Métricas de MercadoLibre (las escribe el backend en la colección mlmetrics).
+  const mlmetrics = data.mlmetrics || []
+  const mlStatus = mlmetrics.find(m => m.id === 'ml_status') || null
+  const mlDe = vehiculoId => mlmetrics.find(m => m.vehiculoId === vehiculoId) || null
+  const mlVinculados = (data.inventario || []).filter(v => v.mlId).length
+
+  async function sincronizarML() {
+    setSyncing(true)
+    try {
+      const r = await fetch('/api/ml/sync')
+      const j = await r.json()
+      if (j.ok) toast(`MercadoLibre sincronizado (${j.synced} de ${j.total})`, 'info')
+      else toast('Error al sincronizar: ' + (j.error || 'desconocido'), 'error')
+    } catch (e) {
+      toast('No se pudo sincronizar. ¿Ya conectaste MercadoLibre?', 'error')
+    }
+    setSyncing(false)
+  }
   const [openId, setOpenId] = useState(null)
   const [sort, setSort] = useState({ campo: 'vehiculo', dir: 'asc' })
 
@@ -65,6 +87,26 @@ export default function Inventario() {
           <Kpi label="Vendidos" value={inv.filter(v => v.estado === 'Vendido').length} accent="ink" />
         </div>
 
+        {isAdmin && (
+          <div className="card mb-16" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div className="row gap-8" style={{ alignItems: 'center' }}>
+              <Badge tone="amber">ML</Badge>
+              <div>
+                <div className="cell-strong" style={{ fontSize: 13 }}>MercadoLibre {mlStatus?.connected ? '· conectado ✓' : '· sin conectar'}</div>
+                <div className="text-3" style={{ fontSize: 11 }}>
+                  {mlVinculados} vehículo{mlVinculados === 1 ? '' : 's'} vinculado{mlVinculados === 1 ? '' : 's'}
+                  {mlStatus?.lastSync ? ` · última sincronización ${fmtDate(mlStatus.lastSync.slice(0, 10))}` : ''}
+                </div>
+              </div>
+            </div>
+            <div className="row gap-8">
+              {mlStatus?.connected
+                ? <button className="btn sm" disabled={syncing} onClick={sincronizarML}><RefreshCw size={13} /> {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}</button>
+                : <a className="btn cyan sm" href="/api/ml/auth">Conectar MercadoLibre</a>}
+            </div>
+          </div>
+        )}
+
         <div className="filters">
           <div className="seg">
             {['Activos', 'Vendidos', 'Todos'].map(e => <button key={e} className={filtro === e ? 'on' : ''} onClick={() => setFiltro(e)}>{e}</button>)}
@@ -89,6 +131,7 @@ export default function Inventario() {
             <tbody>
               {list.map(v => {
                 const interesados = v.estado === 'Vendido' ? [] : interesadosDe(v.id)
+                const ml = v.mlId ? mlDe(v.id) : null
                 const venta = v.estado === 'Vendido' ? (data.ventas || []).find(x => x.vehiculoId === v.id) : null
                 const expandible = interesados.length > 0 || !!venta
                 const open = openId === v.id
@@ -102,6 +145,14 @@ export default function Inventario() {
                         {v.contactoNombre && <div className="text-3" style={{ fontSize: 11 }}>{v.tipo === 'Aliado' ? 'Aliado' : 'Consignante'}: {v.contactoNombre}</div>}
                         {v.tipo === 'Consignación' && v.fuente && <div className="text-3" style={{ fontSize: 11 }}>Fuente: {v.fuente}</div>}
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
+                        {v.mlId && (
+                          <div className="text-3" style={{ fontSize: 11 }}>
+                            {ml?.permalink ? <a href={ml.permalink} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan-700)' }}>ML</a> : 'ML'}: {ml?.precio != null ? fmtMoney(ml.precio) : '—'}
+                            {ml?.visitas30 != null ? ` · 👁 ${ml.visitas30}` : ''}
+                            {ml?.preguntas != null ? ` · ❓ ${ml.preguntas}` : ''}
+                            {ml && ml.estado && ml.estado !== 'active' ? ` · ${ml.estado}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="num">{v.anio || '—'}</td>
                       <td><Badge tone="ink">{v.tipo}</Badge></td>
@@ -210,7 +261,7 @@ function DatoVenta({ label, valor }) {
 function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
   const [form, setForm] = useState(initial || {
     marca: '', modelo: '', anio: '', placa: '', motor: 'Gasolina', precio: '', comision: '', tipo: 'Propio', estado: 'Disponible',
-    fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '', fuente: '',
+    fechaIngreso: today(), owner: 'Simón', contactoId: '', contactoNombre: '', referidoPor: '', comisionReferido: '', fuente: '', mlUrl: '', mlId: '',
   })
   const set = (k, v) => setForm({ ...form, [k]: v })
   const needsLink = linkTipos.includes(form.tipo)
@@ -269,6 +320,17 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
         <Field label="Referido por (opcional)"><input className="input" value={form.referidoPor || ''} onChange={e => set('referidoPor', e.target.value)} placeholder="Nombre de quien refirió" /></Field>
         <Field label="% Comisión referido"><input className="input" value={form.comisionReferido || ''} onChange={e => set('comisionReferido', e.target.value)} placeholder="ej. 2" /></Field>
       </div>
+      <Field label="Anuncio de MercadoLibre (opcional — pega la URL o el ID)">
+        <input className="input" value={form.mlUrl || form.mlId || ''}
+          onChange={e => { const raw = e.target.value; setForm(f => ({ ...f, mlUrl: raw, mlId: parseMlId(raw) })) }}
+          placeholder="https://articulo.mercadolibre.com.co/MCO-… o MCO123…" />
+        {(() => {
+          const id = parseMlId(form.mlUrl || form.mlId || '')
+          if (id) return <div className="text-3" style={{ fontSize: 11, marginTop: 4 }}>Vinculado a <b>{id}</b> · solo los carros con enlace se sincronizan.</div>
+          if (form.mlUrl) return <div style={{ fontSize: 11, marginTop: 4, color: 'var(--red)' }}>No reconocí un ID de MercadoLibre válido.</div>
+          return <div className="text-3" style={{ fontSize: 11, marginTop: 4 }}>Déjalo vacío si este carro no está en MercadoLibre.</div>
+        })()}
+      </Field>
     </Modal>
   )
 }
