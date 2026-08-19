@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react'
 import { useStore } from '../lib/store.jsx'
 import {
-  fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, daysSince, num, ASESORES, MESES, ymOf,
-  inRange, monthRange, yearRange, ytdRange, shiftYear, addMonths, nextBirthdayDate, SI_NO_TERCERO,
+  fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, num, ASESORES, MESES, ymOf,
+  inRange, monthRange, yearRange, ytdRange, shiftYear, SI_NO_TERCERO,
 } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
+import { registrarVenta } from '../lib/ventas.js'
 
 function metrics(arr) {
   const unidades = arr.length
@@ -46,47 +47,8 @@ export default function Ventas() {
   const mtA = metrics(enA), mtB = metrics(enB), mtPrev = metrics(prevYearA)
 
   function handleSave(form) {
-    const vehiculo = data.inventario.find(v => v.id === form.vehiculoId)
-    const cliente = data.leads.find(l => l.id === form.clienteId)
-    const diasVenta = vehiculo?.fechaIngreso ? daysSince(vehiculo.fechaIngreso) : 0
-    const vehName = vehiculo ? `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio || ''}`.trim() : (form.vehiculoLibre || '')
-    const venta = addItem('ventas', {
-      fecha: form.fecha,
-      vehiculo: vehName,
-      vehiculoId: form.vehiculoId || '', cliente: cliente?.nombre || '', clienteId: form.clienteId || '',
-      precio: num(form.precio), comisionPct: form.comisionPct, comision: num(form.comision),
-      ganancia: num(form.ganancia) || num(form.comision), owner: form.owner || 'Simón',
-      fuente: form.fuente, credito: form.credito, seguro: form.seguro, nota: form.nota || '',
-      referido: form.referido || '', comisionReferidoPct: form.comisionReferidoPct || '', comisionReferido: num(form.comisionReferido),
-      diasVenta, esAliado: !vehiculo,
-    })
-    // Toda venta genera una entrega con su checklist (módulo Entregas).
-    addItem('entregas', {
-      ventaId: venta.id, vehiculoId: form.vehiculoId || '', vehiculo: vehName,
-      clienteId: form.clienteId || '', cliente: cliente?.nombre || '', owner: form.owner || 'Simón',
-      placa: vehiculo?.placa || '', motor: vehiculo?.motor || '', fechaVenta: form.fecha,
-      checklist: {}, entregaFecha: '', entregaHora: '', entregaLugar: '', estado: 'En proceso',
-    })
-    if (vehiculo) updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
-    if (cliente) {
-      const eraCliente = cliente.rol === 'cliente'
-      updateItem('leads', cliente.id, { rol: 'cliente' })
-      ;(data.oportunidades || [])
-        .filter(o => o.contactoId === cliente.id && o.estado === 'Abierta' && (!vehiculo || !o.vehiculoId || o.vehiculoId === vehiculo.id))
-        .forEach(o => updateItem('oportunidades', o.id, { estado: 'Ganada' }))
-      // Primera compra → generar plan de fidelización automático desde las plantillas
-      if (!eraCliente) {
-        const plantillas = data.fidelidadPlantillas || []
-        let generadas = 0
-        plantillas.forEach(p => {
-          const fecha = p.base === 'cumple' ? nextBirthdayDate(cliente.cumple) : addMonths(form.fecha, p.meses)
-          if (!fecha) return // sin cumpleaños registrado → se omite esa actividad
-          addItem('actividades', { titulo: p.titulo, fecha, tipo: 'Fidelización', cliente: cliente.nombre, lead: cliente.nombre, owner: form.owner || 'Simón', done: false, auto: true })
-          generadas++
-        })
-        if (generadas) setTimeout(() => toast(`Plan de fidelización generado (${generadas} actividades)`, 'info'), 250)
-      }
-    }
+    const { fidelidadGeneradas } = registrarVenta({ data, addItem, updateItem }, form)
+    if (fidelidadGeneradas) setTimeout(() => toast(`Plan de fidelización generado (${fidelidadGeneradas} actividades)`, 'info'), 250)
     setShowForm(false)
     toast('Venta registrada')
   }
@@ -343,8 +305,22 @@ function CompareRow({ label, a, b, fmt }) {
   )
 }
 
-function VentaForm({ leads, asesores, inventario, onSave, onClose }) {
-  const [form, setForm] = useState({ fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'No', seguro: 'No', nota: '', referido: '', comisionReferidoPct: '', comisionReferido: '' })
+export function VentaForm({ leads, asesores, inventario, initial, onSave, onClose }) {
+  const [form, setForm] = useState(() => {
+    const base = { fecha: today(), vehiculoId: '', clienteId: '', owner: asesores[0] || 'Simón', precio: '', comisionPct: '', comision: '', ganancia: '', fuente: 'Directo', credito: 'No', seguro: 'No', nota: '', referido: '', comisionReferidoPct: '', comisionReferido: '' }
+    if (!initial) return base
+    const merged = { ...base, ...initial }
+    if (!merged.owner) merged.owner = base.owner
+    // Si viene un vehículo prellenado (p. ej. al ganar una oportunidad), calcula su comisión.
+    const v = inventario.find(x => x.id === initial.vehiculoId)
+    if (v) {
+      const precio = merged.precio || v.precio || ''
+      const pct = v.comision || ''
+      const comision = precio && pct ? Math.round(num(precio) * num(pct) / 100) : ''
+      return { ...merged, vehiculoId: v.id, precio, comisionPct: pct, comision, ganancia: comision }
+    }
+    return merged
+  })
 
   const invOrdenado = [...inventario].sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`, 'es', { sensitivity: 'base' }))
 

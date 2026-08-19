@@ -6,6 +6,8 @@ import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, Vehicul
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { crearCita } from '../lib/citas.js'
+import { registrarVenta } from '../lib/ventas.js'
+import { VentaForm } from './Ventas.jsx'
 
 const ESTADO_TONE = { Abierta: 'cyan', Ganada: 'green', Perdida: 'red' }
 const THERMO = THERMO_TONE
@@ -27,6 +29,7 @@ export default function Oportunidades() {
   const [tareaOpp, setTareaOpp] = useState(null)
   const [citaOpp, setCitaOpp] = useState(null)
   const [openId, setOpenId] = useState(null)
+  const [ventaOpp, setVentaOpp] = useState(null) // oportunidad que se está convirtiendo en venta
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
   const [filtro, setFiltro] = useState('abiertas')
@@ -101,11 +104,10 @@ export default function Oportunidades() {
   const calientes = porTemp('caliente'), tibios = porTemp('tibio'), frios = porTemp('frio')
   const ganadas = ops.filter(o => o.estado === 'Ganada' && enRango(o)).length
 
-  function ganar(o) {
-    updateItem('oportunidades', o.id, { estado: 'Ganada' })
-    if (o.contactoId) updateItem('leads', o.contactoId, { rol: 'cliente' })
-    toast(`Oportunidad ganada: ${o.contacto}`)
-  }
+  // Ganar una oportunidad = registrar la venta: abre el formulario de venta ya
+  // prellenado. Al guardar, el vehículo sale del inventario, la oportunidad queda
+  // Ganada, el lead pasa a cliente y se crea la entrega (todo en registrarVenta).
+  function ganar(o) { setVentaOpp(o) }
   function setTemp(o, thermo) { if (o.contactoId) updateItem('leads', o.contactoId, { thermo }) }
   // Cambiar de etapa ajusta automáticamente la temperatura del contacto
   function setStage(o, stage) {
@@ -242,6 +244,15 @@ export default function Oportunidades() {
       {citaOpp && <CitaQuickModal opp={citaOpp} inventario={data.inventario} picoPlaca={data.picoPlaca || {}}
         onSave={c => { crearCita(addItem, updateItem, c, [(data.equipo || []).find(e => e.nombre === c.owner)?.email, data.leads.find(l => l.id === c.clienteId)?.email]); setCitaOpp(null); toast('Cita agendada · visible en Citas y Actividades') }}
         onClose={() => setCitaOpp(null)} />}
+      {ventaOpp && <VentaForm leads={visibleLeads} asesores={ownerOptions} inventario={invActivo}
+        initial={{ vehiculoId: ventaOpp.vehiculoId || '', clienteId: ventaOpp.contactoId || '', precio: ventaOpp.valor || '', owner: ventaOpp.owner }}
+        onSave={form => {
+          const { fidelidadGeneradas } = registrarVenta({ data, addItem, updateItem }, form)
+          if (fidelidadGeneradas) setTimeout(() => toast(`Plan de fidelización generado (${fidelidadGeneradas} actividades)`, 'info'), 250)
+          setVentaOpp(null)
+          toast('Venta registrada · vehículo fuera de inventario')
+        }}
+        onClose={() => setVentaOpp(null)} />}
     </>
   )
 }
