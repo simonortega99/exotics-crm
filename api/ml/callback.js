@@ -1,4 +1,4 @@
-import { ML, supabaseAdmin, putMetric } from '../_ml.js'
+import { ML, supabaseAdmin, saveAuth, putMetric } from '../_ml.js'
 
 // MercadoLibre redirige aquí con ?code=... tras autorizar. Intercambiamos el
 // code por access_token + refresh_token y los guardamos (tabla ml_auth).
@@ -17,9 +17,9 @@ export default async function handler(req, res) {
       return
     }
     const sb = supabaseAdmin()
-    await sb.from('ml_auth').upsert({
-      id: 'ml', user_id: j.user_id, access_token: j.access_token, refresh_token: j.refresh_token,
-      expires_at: Date.now() + (j.expires_in || 21600) * 1000, updated_at: new Date().toISOString(),
+    await saveAuth(sb, {
+      user_id: j.user_id, access_token: j.access_token, refresh_token: j.refresh_token,
+      expires_at: Date.now() + (j.expires_in || 21600) * 1000,
     })
     await putMetric(sb, 'ml_status', { connected: true, sellerId: j.user_id, lastSync: null, itemsSynced: 0 })
     res.writeHead(302, { Location: `${ML.appUrl}/#/inventario` })
