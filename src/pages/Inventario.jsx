@@ -12,29 +12,48 @@ const linkTipos = ['Consignación', 'Aliado']
 
 export default function Inventario() {
   const { data, addItem, updateItem, deleteItemUndo } = useStore()
-  const { isAdmin } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filtro, setFiltro] = useState('Activos')
   const [syncing, setSyncing] = useState(false)
+  const [showRevisar, setShowRevisar] = useState(false)
 
   // Métricas de MercadoLibre (las escribe el backend en la colección mlmetrics).
   const mlmetrics = data.mlmetrics || []
   const mlStatus = mlmetrics.find(m => m.id === 'ml_status') || null
   const mlDe = vehiculoId => mlmetrics.find(m => m.vehiculoId === vehiculoId) || null
   const mlVinculados = (data.inventario || []).filter(v => v.mlId).length
+  // Anuncios de ML que aún no están en el CRM (para revisar/importar).
+  const invMlIds = new Set((data.inventario || []).filter(v => v.mlId).map(v => v.mlId))
+  const mlPending = (mlmetrics.find(m => m.id === 'ml_pending')?.items) || []
+  const pendientes = mlPending.filter(p => !invMlIds.has(p.mlId))
 
   async function sincronizarML() {
     setSyncing(true)
     try {
       const r = await fetch('/api/ml/sync')
       const j = await r.json()
-      if (j.ok) toast(`MercadoLibre sincronizado (${j.synced} de ${j.total})`, 'info')
+      if (j.ok) toast(`MercadoLibre sincronizado (${j.synced} vinculados${j.pendientes ? `, ${j.pendientes} sin vincular` : ''})`, 'info')
       else toast('Error al sincronizar: ' + (j.error || 'desconocido'), 'error')
     } catch (e) {
       toast('No se pudo sincronizar. ¿Ya conectaste MercadoLibre?', 'error')
     }
     setSyncing(false)
+  }
+
+  function importarPendiente(p) {
+    addItem('inventario', {
+      marca: p.marca || '', modelo: p.modelo || p.title || '', anio: p.anio || '', placa: '', motor: p.motor || 'Gasolina',
+      precio: p.precio || '', comision: '', tipo: 'Propio', estado: 'Disponible', fechaIngreso: today(),
+      owner: user?.nombre || 'Simón', color: p.color || '', km: p.km || '', mlId: p.mlId, mlUrl: p.permalink || '',
+    })
+    toast('Vehículo importado de MercadoLibre')
+  }
+  function vincularPendiente(p, vehiculoId) {
+    if (!vehiculoId) return
+    updateItem('inventario', vehiculoId, { mlId: p.mlId, mlUrl: p.permalink || '' })
+    toast('Anuncio vinculado')
   }
   const [openId, setOpenId] = useState(null)
   const [sort, setSort] = useState({ campo: 'vehiculo', dir: 'asc' })
@@ -99,7 +118,10 @@ export default function Inventario() {
                 </div>
               </div>
             </div>
-            <div className="row gap-8">
+            <div className="row gap-8 wrap">
+              {mlStatus?.connected && pendientes.length > 0 && (
+                <button className="btn cyan sm" onClick={() => setShowRevisar(true)}>Revisar {pendientes.length} sin vincular</button>
+              )}
               {mlStatus?.connected
                 ? <button className="btn sm" disabled={syncing} onClick={sincronizarML}><RefreshCw size={13} /> {syncing ? 'Sincronizando…' : 'Sincronizar ahora'}</button>
                 : <a className="btn cyan sm" href="/api/ml/auth">Conectar MercadoLibre</a>}
@@ -228,7 +250,46 @@ export default function Inventario() {
           if (f.tipo === 'Consignación' && f.contactoId) updateItem('leads', f.contactoId, { vehiculoConsignadoId: editing.id, vehiculoConsignado: `${f.marca} ${f.modelo} ${f.anio || ''}`.trim() })
           setEditing(null); toast('Vehículo actualizado')
         }} onClose={() => setEditing(null)} />}
+      {showRevisar && <RevisarMLModal pendientes={pendientes}
+        inventario={(data.inventario || []).filter(v => !v.mlId && v.estado !== 'Vendido')}
+        onImportar={importarPendiente} onVincular={vincularPendiente} onClose={() => setShowRevisar(false)} />}
     </>
+  )
+}
+
+// Revisión de anuncios de MercadoLibre sin vincular: importar o vincular con un clic.
+function RevisarMLModal({ pendientes, inventario, onImportar, onVincular, onClose }) {
+  const [sel, setSel] = useState({})
+  return (
+    <Modal title={`Anuncios de MercadoLibre sin vincular (${pendientes.length})`} onClose={onClose} width={560}
+      footer={<button className="btn" onClick={onClose}>Cerrar</button>}>
+      <div className="text-3 mb-12" style={{ fontSize: 12 }}>
+        Importa cada anuncio como carro nuevo, o vincúlalo a uno que ya tengas. Los que no toques quedan igual.
+      </div>
+      {!pendientes.length && <div className="text-3" style={{ fontSize: 13, padding: '8px 0' }}>No quedan anuncios sin vincular. 🎉</div>}
+      {pendientes.map(p => (
+        <div key={p.mlId} className="card" style={{ background: 'var(--surface-2)', boxShadow: 'none', padding: 12, marginBottom: 10 }}>
+          <div className="row between gap-8" style={{ alignItems: 'flex-start' }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="cell-strong" style={{ fontSize: 13 }}>{[p.marca, p.modelo, p.anio].filter(Boolean).join(' ') || p.title}</div>
+              <div className="text-3" style={{ fontSize: 11.5 }}>
+                {fmtMoney(p.precio)}{p.km ? ` · ${p.km} km` : ''}{p.color ? ` · ${p.color}` : ''}
+                {p.permalink ? <> · <a href={p.permalink} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan-700)' }}>ver anuncio</a></> : ''}
+              </div>
+            </div>
+            <button className="btn cyan sm" onClick={() => onImportar(p)}>Importar</button>
+          </div>
+          <div className="row gap-6 mt-8 wrap" style={{ alignItems: 'center' }}>
+            <span className="text-3" style={{ fontSize: 11 }}>o vincular a:</span>
+            <select className="select" style={{ maxWidth: 240 }} value={sel[p.mlId] || ''} onChange={e => setSel(s => ({ ...s, [p.mlId]: e.target.value }))}>
+              <option value="">— Carro del inventario —</option>
+              {inventario.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.anio}</option>)}
+            </select>
+            <button className="btn sm" disabled={!sel[p.mlId]} onClick={() => { onVincular(p, sel[p.mlId]); setSel(s => ({ ...s, [p.mlId]: '' })) }}>Vincular</button>
+          </div>
+        </div>
+      ))}
+    </Modal>
   )
 }
 
