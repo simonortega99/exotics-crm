@@ -34,10 +34,22 @@ export function registrarVenta({ data, addItem, updateItem }, form) {
   if (vehiculo) {
     updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
     // Si el vehículo venía de una retoma vinculada, cierra esa retoma con su valor
-    // de venta (queda como "vendida" y calcula la rentabilidad real).
+    // de venta (queda como "vendida" y calcula la rentabilidad real), y registra
+    // esa rentabilidad en Finanzas como ingreso (o egreso si dio pérdida).
     ;(data.retomas || [])
       .filter(rt => rt.vehiculoId === vehiculo.id && !(num(rt.valorVenta) > 0))
-      .forEach(rt => updateItem('retomas', rt.id, { valorVenta: num(form.precio), fechaVenta: form.fecha }))
+      .forEach(rt => {
+        const valorVenta = num(form.precio)
+        updateItem('retomas', rt.id, { valorVenta, fechaVenta: form.fecha })
+        const inversion = num(rt.valorCompra) + (rt.gastos || []).reduce((a, g) => a + num(g.monto), 0)
+        const rent = valorVenta - inversion
+        const nombre = `${rt.marca || ''} ${rt.modelo || ''}`.trim() || 'retoma'
+        if (rent >= 0) {
+          addItem('finanzas', { fecha: form.fecha, tipo: 'Ingreso', persona: 'Empresa', monto: rent, descripcion: `Rentabilidad retoma: ${nombre}`, auto: true, retomaId: rt.id })
+        } else {
+          addItem('finanzas', { fecha: form.fecha, tipo: 'Egreso', persona: 'Empresa', monto: -rent, descripcion: `Pérdida retoma: ${nombre}`, auto: true, retomaId: rt.id })
+        }
+      })
   }
 
   let fidelidadGeneradas = 0
