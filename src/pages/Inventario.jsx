@@ -169,9 +169,9 @@ export default function Inventario() {
                         {v.referidoPor && <div className="text-3" style={{ fontSize: 11 }}>Referido: {v.referidoPor}{v.comisionReferido ? ` (${v.comisionReferido}%)` : ''}</div>}
                         {v.mlId && (
                           <div className="text-3" style={{ fontSize: 11 }}>
-                            {ml?.permalink ? <a href={ml.permalink} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan-700)' }}>ML</a> : 'ML'}: {ml?.precio != null ? fmtMoney(ml.precio) : '—'}
-                            {ml?.visitas30 != null ? ` · 👁 ${ml.visitas30}` : ''}
-                            {ml?.preguntas != null ? ` · ❓ ${ml.preguntas}` : ''}
+                            {ml?.permalink ? <a href={ml.permalink} target="_blank" rel="noreferrer" style={{ color: 'var(--cyan-700)' }}>ML</a> : 'ML'}
+                            {ml?.visitas30 != null ? ` · ${ml.visitas30} visita${ml.visitas30 === 1 ? '' : 's'}` : ''}
+                            {ml?.preguntas != null ? ` · ${ml.preguntas} pregunta${ml.preguntas === 1 ? '' : 's'}` : ''}
                             {ml && ml.estado && ml.estado !== 'active' ? ` · ${ml.estado}` : ''}
                           </div>
                         )}

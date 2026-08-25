@@ -31,7 +31,14 @@ export function registrarVenta({ data, addItem, updateItem }, form) {
     checklist: {}, entregaFecha: '', entregaHora: '', entregaLugar: '', estado: 'En proceso',
   })
 
-  if (vehiculo) updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
+  if (vehiculo) {
+    updateItem('inventario', vehiculo.id, { estado: 'Vendido' })
+    // Si el vehículo venía de una retoma vinculada, cierra esa retoma con su valor
+    // de venta (queda como "vendida" y calcula la rentabilidad real).
+    ;(data.retomas || [])
+      .filter(rt => rt.vehiculoId === vehiculo.id && !(num(rt.valorVenta) > 0))
+      .forEach(rt => updateItem('retomas', rt.id, { valorVenta: num(form.precio), fechaVenta: form.fecha }))
+  }
 
   let fidelidadGeneradas = 0
   if (cliente) {
