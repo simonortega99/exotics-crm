@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth.jsx'
 import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, FUENTES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias, parseMlId } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
-import { Download, RefreshCw } from 'lucide-react'
+import { Download, RefreshCw, Search } from 'lucide-react'
 
 const ESTADO_TONE = { Disponible: 'green', Reservado: 'amber', Vendido: 'gray' }
 const THERMO = THERMO_TONE
@@ -16,6 +16,7 @@ export default function Inventario() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filtro, setFiltro] = useState('Activos')
+  const [query, setQuery] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [showRevisar, setShowRevisar] = useState(false)
 
@@ -60,13 +61,15 @@ export default function Inventario() {
 
   const inv = data.inventario
   const matchFiltro = v => filtro === 'Todos' ? true : filtro === 'Vendidos' ? v.estado === 'Vendido' : v.estado !== 'Vendido'
+  const q = query.trim().toLowerCase()
+  const matchQuery = v => !q || `${v.marca || ''} ${v.modelo || ''} ${v.anio || ''} ${v.placa || ''}`.toLowerCase().includes(q)
   const sortVal = (v, campo) => campo === 'vehiculo' ? `${v.marca} ${v.modelo}`.toLowerCase()
     : campo === 'anio' ? num(v.anio)
     : campo === 'precio' ? num(v.precio)
     : campo === 'comision' ? num(v.comision)
     : campo === 'dias' ? (v.fechaIngreso ? daysSince(v.fechaIngreso) : -1)
     : (v[campo] || '')
-  const list = inv.filter(matchFiltro).sort((a, b) => {
+  const list = inv.filter(matchFiltro).filter(matchQuery).sort((a, b) => {
     const av = sortVal(a, sort.campo), bv = sortVal(b, sort.campo)
     const c = av < bv ? -1 : av > bv ? 1 : 0
     return sort.dir === 'asc' ? c : -c
@@ -130,6 +133,10 @@ export default function Inventario() {
         )}
 
         <div className="filters">
+          <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
+            <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', pointerEvents: 'none' }} />
+            <input className="input" style={{ paddingLeft: 32 }} placeholder="Buscar por marca, modelo o placa…" value={query} onChange={e => setQuery(e.target.value)} />
+          </div>
           <div className="seg">
             {['Activos', 'Vendidos', 'Todos'].map(e => <button key={e} className={filtro === e ? 'on' : ''} onClick={() => setFiltro(e)}>{e}</button>)}
           </div>

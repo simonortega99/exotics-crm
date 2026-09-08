@@ -22,7 +22,7 @@ import { toast } from '../components/feedback.jsx'
 const STORAGE_KEY = 'exotics_hq_data'
 
 const ARRAY_COLLECTIONS = ['leads', 'oportunidades', 'inventario', 'retomas', 'busquedas', 'ventas', 'actividades', 'fidelidad', 'contenidos', 'finanzas', 'citas', 'entregas', 'mlmetrics']
-const SETTINGS_KEYS = ['asesores', 'equipo', 'fidelidadPlantillas', 'fidelidadTipos', 'meta', 'metaAnual', 'metaTipo', 'picoPlaca', 'redes', '_migratedOpps', '_unifiedActivities']
+const SETTINGS_KEYS = ['asesores', 'equipo', 'fidelidadPlantillas', 'fidelidadTipos', 'meta', 'metaAnual', 'metaTipo', 'metasMes', 'picoPlaca', 'redes', '_migratedOpps', '_unifiedActivities']
 
 const initialState = {
   leads: [], oportunidades: [], inventario: [], retomas: [], busquedas: [], ventas: [],
@@ -39,7 +39,7 @@ const initialState = {
     { id: 'p3', titulo: 'Felicitación de cumpleaños', base: 'cumple', meses: 0 },
   ],
   fidelidadTipos: ['Llamada de cortesía', 'Regalo / aniversario', 'Oferta exclusiva', 'Mantenimiento VIP', 'Encuesta de satisfacción', 'Referido', 'Otro'],
-  meta: 8, metaAnual: 96, metaTipo: 'mensual',
+  meta: 8, metaAnual: 96, metaTipo: 'mensual', metasMes: {},
   redes: { ig: {}, tt: {} },
   _migratedOpps: false,
 }
@@ -55,6 +55,7 @@ function withDefaults(d) {
   if (!Array.isArray(s.fidelidadPlantillas)) s.fidelidadPlantillas = initialState.fidelidadPlantillas
   if (!Array.isArray(s.fidelidadTipos) || !s.fidelidadTipos.length) s.fidelidadTipos = initialState.fidelidadTipos
   if (!s.picoPlaca || typeof s.picoPlaca !== 'object') s.picoPlaca = { 1: [], 2: [], 3: [], 4: [], 5: [] }
+  if (!s.metasMes || typeof s.metasMes !== 'object') s.metasMes = {}
   ARRAY_COLLECTIONS.forEach(c => { if (!Array.isArray(s[c])) s[c] = [] })
   return s
 }

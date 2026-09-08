@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import {
-  fmtMoney, fmtMoneyShort, cumpleInfo, today, num,
+  fmtMoney, fmtMoneyShort, cumpleInfo, today, num, MESES, ymOf,
   inRange, monthRange, yearRange, ytdRange, shiftYear, prevPeriod, fmtRange,
 } from '../lib/utils.js'
 import { Topbar, Page, Kpi, Card, Badge } from '../components/ui.jsx'
@@ -66,7 +66,14 @@ export default function Dashboard() {
   // mensual o anual guardada según el tamaño del rango (≤ 1 mes → mensual).
   const rangeDays = (desde && hasta) ? Math.round((new Date(hasta) - new Date(desde)) / 86400000) + 1 : 31
   const metaEsMensual = rangeDays <= 31
-  const metaTarget = (metaEsMensual ? meta : metaAnual) || 1
+  // Meta por mes: cada mes tiene su propia meta; al cambiar de mes en el rango,
+  // la meta mostrada/editada cambia a la de ese mes (fallback a la meta por defecto).
+  const metasMes = data.metasMes || {}
+  const ym = ymOf(desde)
+  const monthKey = ym ? `${ym.y}-${String(ym.m).padStart(2, '0')}` : ''
+  const monthLabel = ym ? `${MESES[ym.m - 1]} ${ym.y}` : ''
+  const metaMensual = (monthKey && metasMes[monthKey] != null) ? metasMes[monthKey] : meta
+  const metaTarget = (metaEsMensual ? metaMensual : metaAnual) || 1
   const pct = Math.min(100, Math.round((ventasP.length / metaTarget) * 100))
 
   const cumpleProximos = leads.filter(l => { const ci = cumpleInfo(l.cumple); return ci && ci.diff <= 3 })
@@ -168,7 +175,7 @@ export default function Dashboard() {
             <div className="split wide">
               <Card>
                 <div className="card-head">
-                  <span className="card-title">Meta de ventas · {metaEsMensual ? 'mensual' : 'anual'}</span>
+                  <span className="card-title">Meta de ventas · {metaEsMensual ? monthLabel : 'anual'}</span>
                 </div>
                 <div className="row between" style={{ alignItems: 'baseline', marginBottom: 10 }}>
                   <span className="kpi-value cyan" style={{ fontSize: 32 }}>{pct}%</span>
@@ -178,16 +185,18 @@ export default function Dashboard() {
                 {isAdmin && (
                   <div className="row gap-16 mt-16">
                     <div>
-                      <div className="field-label">Meta mensual</div>
-                      <input className="input" type="number" min="1" value={meta} onChange={e => setField('meta', Math.max(1, +e.target.value || 1))} style={{ width: 80, textAlign: 'center' }} />
+                      <div className="field-label">Meta de {monthLabel}</div>
+                      <input className="input" type="number" min="1" value={metaMensual}
+                        onChange={e => setField('metasMes', { ...metasMes, [monthKey]: Math.max(1, +e.target.value || 1) })}
+                        style={{ width: 90, textAlign: 'center' }} />
                     </div>
                     <div>
                       <div className="field-label">Meta anual</div>
-                      <input className="input" type="number" min="1" value={metaAnual} onChange={e => setField('metaAnual', Math.max(1, +e.target.value || 1))} style={{ width: 80, textAlign: 'center' }} />
+                      <input className="input" type="number" min="1" value={metaAnual} onChange={e => setField('metaAnual', Math.max(1, +e.target.value || 1))} style={{ width: 90, textAlign: 'center' }} />
                     </div>
                   </div>
                 )}
-                <div className="text-3 mt-16" style={{ fontSize: 11.5 }}>Compara las ventas del rango contra la meta {metaEsMensual ? 'mensual' : 'anual'} (rangos de ≤ 1 mes usan la mensual; mayores, la anual). Las metas quedan guardadas.</div>
+                <div className="text-3 mt-16" style={{ fontSize: 11.5 }}>Cada mes tiene su propia meta: cambia el rango a otro mes (usa "Este mes" / "Mes pasado" o las fechas) y edita la meta de ese mes. Los rangos de más de un mes usan la meta anual. Todo queda guardado.</div>
               </Card>
 
               <Card title="Alertas y tareas de hoy">
