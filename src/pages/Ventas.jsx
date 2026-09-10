@@ -4,7 +4,7 @@ import {
   fmtMoney, fmtMoneyShort, fmtDate, fmtRange, today, num, ASESORES, MESES, ymOf,
   inRange, monthRange, yearRange, ytdRange, shiftYear, SI_NO_TERCERO,
 } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Kpi, Card, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab, SearchSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { registrarVenta } from '../lib/ventas.js'
@@ -246,10 +246,8 @@ function VentaEditForm({ venta, leads, asesores, onSave, onClose }) {
         </Field>
       </div>
       <Field label="Cliente">
-        <select className="select" value={form.clienteId} onChange={e => set('clienteId', e.target.value)}>
-          <option value="">{venta.cliente || '— Sin cliente —'}</option>
-          {leads.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
+        <SearchSelect value={form.clienteId} onChange={v => set('clienteId', v)} placeholder={venta.cliente || '— Sin cliente —'} searchPlaceholder="Buscar contacto…"
+          options={[{ value: '', label: venta.cliente || '— Sin cliente —' }, ...leads.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined }))]} />
       </Field>
       <div className="form-grid cols-2">
         <Field label="Precio de venta"><NumberInput prefix="$" value={form.precio} onChange={v => set('precio', v)} /></Field>
@@ -342,17 +340,13 @@ export function VentaForm({ leads, asesores, inventario, initial, onSave, onClos
     <Modal title="Registrar venta" onClose={onClose} width={470}
       footer={<ModalButtons onClose={onClose} onSave={() => onSave(form)} disabled={!form.precio} />}>
       <Field label="Vehículo (inventario)">
-        <select className="select" value={form.vehiculoId} onChange={e => pickVehiculo(e.target.value)}>
-          <option value="">— Venta sin inventario (aliado) —</option>
-          {invOrdenado.map(v => <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.anio} — {fmtMoney(v.precio)}{v.comision ? ` · ${v.comision}%` : ''}</option>)}
-        </select>
+        <SearchSelect value={form.vehiculoId} onChange={pickVehiculo} placeholder="— Venta sin inventario (aliado) —" searchPlaceholder="Buscar vehículo…"
+          options={[{ value: '', label: '— Venta sin inventario (aliado) —' }, ...invOrdenado.map(v => ({ value: v.id, label: `${v.marca} ${v.modelo} ${v.anio || ''}`.trim(), sub: `${fmtMoney(v.precio)}${v.comision ? ` · ${v.comision}%` : ''}` }))]} />
       </Field>
       <div className="form-grid cols-2">
         <Field label="Cliente">
-          <select className="select" value={form.clienteId} onChange={e => setForm({ ...form, clienteId: e.target.value })}>
-            <option value="">— Seleccionar cliente —</option>
-            {leads.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
+          <SearchSelect value={form.clienteId} onChange={v => setForm(f => ({ ...f, clienteId: v }))} placeholder="— Seleccionar cliente —" searchPlaceholder="Buscar contacto…"
+            options={[{ value: '', label: '— Sin cliente —' }, ...leads.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined }))]} />
         </Field>
         <Field label="Asesor">
           <select className="select" value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>{asesores.map(a => <option key={a}>{a}</option>)}</select>

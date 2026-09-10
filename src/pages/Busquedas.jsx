@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtDate, today, num } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab, SearchSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 
 const ESTADO_TONE = { Buscando: 'cyan', 'En pausa': 'gray', Encontrado: 'green' }
@@ -116,10 +116,8 @@ function BusquedaForm({ leads, initial, onSave, onClose }) {
     <Modal title={initial ? 'Editar búsqueda' : 'Nueva búsqueda'} onClose={onClose} width={440}
       footer={<ModalButtons onClose={onClose} onSave={() => onSave(form)} disabled={!valido} saveLabel={initial ? 'Guardar cambios' : 'Guardar'} />}>
       <Field label="Contacto del directorio">
-        <select className="select" value={form.contactoId} onChange={e => pickContacto(e.target.value)}>
-          <option value="">— Seleccionar contacto —</option>
-          {leads.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
+        <SearchSelect value={form.contactoId} onChange={pickContacto} placeholder="— Seleccionar contacto —" searchPlaceholder="Buscar contacto…"
+          options={[{ value: '', label: '— Seleccionar contacto —' }, ...leads.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined }))]} />
       </Field>
       {(sinContactos || !form.contactoId) && (
         <Field label="…o nombre (si aún no está en Contactos)">

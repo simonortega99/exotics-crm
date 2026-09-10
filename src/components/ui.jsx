@@ -1,9 +1,58 @@
 import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
-import { X, MoreVertical } from 'lucide-react'
+import { X, MoreVertical, Search, ChevronDown } from 'lucide-react'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
+
+// Selector con buscador (combobox): se ve como un select pero puedes escribir
+// para filtrar. options: [{ value, label, sub? }]. El caller incluye cualquier
+// opción especial (vacía, "Otro", etc.). onChange(nuevoValue).
+export function SearchSelect({ value, onChange, options, placeholder = 'Seleccionar…', searchPlaceholder = 'Buscar…' }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [pos, setPos] = useState({})
+  const ref = useRef(null)
+  const selected = options.find(o => o.value === value)
+  const qq = q.trim().toLowerCase()
+  const filtered = qq ? options.filter(o => `${o.label} ${o.sub || ''}`.toLowerCase().includes(qq)) : options
+
+  function abrir() {
+    const r = ref.current.getBoundingClientRect()
+    const espacioAbajo = window.innerHeight - r.bottom
+    setPos({ left: r.left, width: r.width, top: r.bottom + 4, maxH: Math.max(180, Math.min(320, espacioAbajo - 12)) })
+    setQ(''); setOpen(true)
+  }
+  return (
+    <>
+      <button type="button" ref={ref} className="select ss-trigger" onClick={abrir}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: selected ? 'var(--text)' : 'var(--text-3)' }}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <ChevronDown size={15} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+      </button>
+      {open && createPortal(
+        <>
+          <div className="ss-overlay" onMouseDown={() => setOpen(false)} />
+          <div className="ss-menu" style={{ left: pos.left, width: pos.width, top: pos.top }}>
+            <div className="ss-search">
+              <Search size={14} />
+              <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={searchPlaceholder}
+                onKeyDown={e => { if (e.key === 'Enter' && filtered[0]) { onChange(filtered[0].value); setOpen(false) } if (e.key === 'Escape') setOpen(false) }} />
+            </div>
+            <div className="ss-list" style={{ maxHeight: pos.maxH }}>
+              {filtered.map(o => (
+                <button key={o.value} type="button" className={`ss-item${o.value === value ? ' on' : ''}`} onClick={() => { onChange(o.value); setOpen(false) }}>
+                  {o.label}{o.sub ? <span className="text-3"> · {o.sub}</span> : ''}
+                </button>
+              ))}
+              {!filtered.length && <div className="ss-empty">Sin resultados</div>}
+            </div>
+          </div>
+        </>, document.body)}
+    </>
+  )
+}
 
 // Marca: usa /logo.png si existe; si no, cae al escudo por defecto.
 export function BrandMark({ size = 38 }) {
@@ -72,22 +121,22 @@ export function VehiculoInteresSelect({ inventario, value, onChange }) {
   // Orden alfabético por marca + modelo
   const invOrdenado = [...inventario].sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`, 'es', { sensitivity: 'base' }))
 
-  function pick(e) {
-    const val = e.target.value
+  function pick(val) {
     if (val === '__otro__') { setOtro(true); onChange({ vehiculoId: '', vehiculoInteres: '' }) }
     else if (val === '') { setOtro(false); onChange({ vehiculoId: '', vehiculoInteres: '' }) }
     else { setOtro(false); const v = inventario.find(x => x.id === val); onChange({ vehiculoId: val, vehiculoInteres: vehName(v) }) }
   }
   const selectVal = otro ? '__otro__' : (value.vehiculoId || '')
+  const options = [
+    { value: '', label: '— Ninguno —' },
+    ...invOrdenado.map(v => ({ value: v.id, label: v.placa ? `${vehName(v)} · ${v.placa}` : vehName(v) })),
+    ...(value.vehiculoId && !known ? [{ value: value.vehiculoId, label: `${value.vehiculoInteres || 'Vehículo'} (no disponible)` }] : []),
+    { value: '__otro__', label: 'Otro (especificar)…' },
+  ]
 
   return (
     <>
-      <select className="select" value={selectVal} onChange={pick}>
-        <option value="">— Ninguno —</option>
-        {invOrdenado.map(v => <option key={v.id} value={v.id}>{vehName(v)}{v.placa ? ` · ${v.placa}` : ''}</option>)}
-        {value.vehiculoId && !known && <option value={value.vehiculoId}>{value.vehiculoInteres || 'Vehículo'} (no disponible)</option>}
-        <option value="__otro__">Otro (especificar)…</option>
-      </select>
+      <SearchSelect value={selectVal} onChange={pick} options={options} placeholder="— Ninguno —" searchPlaceholder="Buscar vehículo…" />
       {otro && <input className="input" style={{ marginTop: 8 }} placeholder="¿Qué vehículo busca? (fuera de inventario)"
         value={value.vehiculoInteres} onChange={e => onChange({ vehiculoId: '', vehiculoInteres: e.target.value })} autoFocus />}
     </>

@@ -2,7 +2,7 @@ import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { TIPOS_VEHICULO, ESTADOS_VEHICULO, OPP_STAGES, ASESORES, THERMO_TONE, MOTORES, FUENTES, fmtMoney, fmtMoneyShort, fmtDate, daysSince, today, num, exportarHojaXls, diasPicoPlaca, nombresDias, parseMlId } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab, SearchSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { Download, RefreshCw, Search } from 'lucide-react'
 
@@ -360,10 +360,8 @@ function VehiculoForm({ title, leads, asesores, initial, onSave, onClose }) {
       </div>
       {needsLink && (
         <Field label={`Contacto (${linkRol})`}>
-          <select className="select" value={form.contactoId} onChange={e => pickContacto(e.target.value)}>
-            <option value="">— Sin vincular —</option>
-            {leadsLink.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
+          <SearchSelect value={form.contactoId} onChange={pickContacto} placeholder="— Sin vincular —" searchPlaceholder="Buscar contacto…"
+            options={[{ value: '', label: '— Sin vincular —' }, ...leadsLink.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined }))]} />
           {!leadsLink.length && <div className="text-3" style={{ fontSize: 11, marginTop: 4 }}>No hay contactos con rol "{linkRol}". Créalos en Contactos.</div>}
         </Field>
       )}

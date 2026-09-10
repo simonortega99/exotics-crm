@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtDate, today, isOverdue, inRange, weekRange, monthRange, ASESORES } from '../lib/utils.js'
-import { Topbar, Page, Card, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Card, Field, Modal, ModalButtons, Badge, EmptyRow, Kebab, SearchSelect } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
@@ -220,10 +220,8 @@ function ActividadForm({ leads, asesores, initial, onSave, onClose }) {
           <select className="select" value={form.owner} onChange={e => set('owner', e.target.value)}>{asesores.map(a => <option key={a}>{a}</option>)}</select>
         </Field>
         <Field label="Contacto relacionado">
-          <select className="select" value={form.lead} onChange={e => set('lead', e.target.value)}>
-            <option value="">— Ninguno —</option>
-            {leads.map(l => <option key={l.id} value={l.nombre}>{l.nombre}</option>)}
-          </select>
+          <SearchSelect value={form.lead} onChange={v => set('lead', v)} placeholder="— Ninguno —" searchPlaceholder="Buscar contacto…"
+            options={[{ value: '', label: '— Ninguno —' }, ...leads.map(l => ({ value: l.nombre, label: l.nombre }))]} />
         </Field>
       </div>
     </Modal>

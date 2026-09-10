@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
 import { GripVertical } from 'lucide-react'
 import { useStore } from '../lib/store.jsx'
 import { OPP_STAGES, ASESORES, THERMO_TONE, thermoForStage, fmtMoney, fmtDate, fmtRange, today, addDays, num, inRange, isOverdue, picoPlacaRestringido } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, VehiculoInteresSelect, NumberInput, Kebab, SearchSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { crearCita } from '../lib/citas.js'
@@ -275,10 +275,8 @@ function OppForm({ leads, asesores, inventario, onSave, onClose }) {
     <Modal title="Nueva oportunidad" onClose={onClose} width={460}
       footer={<ModalButtons onClose={onClose} onSave={save} disabled={!form.contactoId} />}>
       <Field label="Contacto">
-        <select className="select" value={form.contactoId} onChange={e => set('contactoId', e.target.value)}>
-          <option value="">— Seleccionar contacto —</option>
-          {leads.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-        </select>
+        <SearchSelect value={form.contactoId} onChange={v => set('contactoId', v)} placeholder="— Seleccionar contacto —" searchPlaceholder="Buscar contacto…"
+          options={[{ value: '', label: '— Seleccionar contacto —' }, ...leads.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined }))]} />
       </Field>
       <Field label="Vehículo de interés">
         <VehiculoInteresSelect inventario={inventario} value={{ vehiculoId: form.vehiculoId, vehiculoInteres: form.vehiculoInteres }}

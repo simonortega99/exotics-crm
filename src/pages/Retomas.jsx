@@ -1,7 +1,7 @@
 import { useState, Fragment } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { fmtMoney, fmtMoneyShort, fmtDate, today, num } from '../lib/utils.js'
-import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Kpi, Field, Modal, ModalButtons, Badge, EmptyRow, NumberInput, Kebab, SearchSelect } from '../components/ui.jsx'
 import { toast } from '../components/feedback.jsx'
 
 const vehName = v => v ? `${v.marca} ${v.modelo} ${v.anio || ''}`.trim() : ''
@@ -159,10 +159,8 @@ function RetomaForm({ title, inventario, initial, onSave, onClose }) {
         <Field label="Valor de venta"><NumberInput prefix="$" value={form.valorVenta} onChange={v => set('valorVenta', v)} placeholder="al cerrar" /></Field>
       </div>
       <Field label="Vincular a vehículo de inventario (opcional)">
-        <select className="select" value={form.vehiculoId} onChange={e => pickVeh(e.target.value)}>
-          <option value="">— Sin vincular —</option>
-          {inventario.map(v => <option key={v.id} value={v.id}>{vehName(v)} · {v.estado}</option>)}
-        </select>
+        <SearchSelect value={form.vehiculoId} onChange={pickVeh} placeholder="— Sin vincular —" searchPlaceholder="Buscar vehículo…"
+          options={[{ value: '', label: '— Sin vincular —' }, ...inventario.map(v => ({ value: v.id, label: `${vehName(v)} · ${v.estado}` }))]} />
       </Field>
 
       <div className="row between" style={{ margin: '6px 0 8px' }}>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../lib/store.jsx'
 import { useAuth } from '../lib/auth.jsx'
 import { fmtDate, today, picoPlacaRestringido, weekdayOf, DIAS_LV, ASESORES } from '../lib/utils.js'
-import { Topbar, Page, Field, Modal, ModalButtons, Badge, Kebab } from '../components/ui.jsx'
+import { Topbar, Page, Field, Modal, ModalButtons, Badge, Kebab, SearchSelect } from '../components/ui.jsx'
 import Calendar from '../components/Calendar.jsx'
 import { toast } from '../components/feedback.jsx'
 import { crearCita } from '../lib/citas.js'
@@ -199,23 +199,16 @@ function CitaForm({ initial, presetFecha, leads, oportunidades, inventario, ases
     <Modal title={initial ? 'Editar cita' : 'Nueva cita'} onClose={onClose} width={460}
       footer={<ModalButtons onClose={onClose} onSave={() => onSave(form)} disabled={!form.clienteId && !form.vehiculoId} saveLabel={initial ? 'Guardar cambios' : 'Agendar'} />}>
       <Field label="Vehículo a mostrar">
-        <select className="select" value={form.vehiculoId} onChange={e => set('vehiculoId', e.target.value)}>
-          <option value="">— Seleccionar vehículo —</option>
-          {inventario.map(v => <option key={v.id} value={v.id}>{vehName(v)}{v.placa ? ` · ${v.placa}` : ''}</option>)}
-        </select>
+        <SearchSelect value={form.vehiculoId} onChange={v => set('vehiculoId', v)} placeholder="— Seleccionar vehículo —" searchPlaceholder="Buscar vehículo…"
+          options={[{ value: '', label: '— Seleccionar vehículo —' }, ...inventario.map(v => ({ value: v.id, label: v.placa ? `${vehName(v)} · ${v.placa}` : vehName(v) }))]} />
       </Field>
       <Field label="Cliente">
-        <select className="select" value={form.clienteId} onChange={e => set('clienteId', e.target.value)}>
-          <option value="">— Seleccionar contacto —</option>
-          {sugeridos.length > 0 && (
-            <optgroup label="⭐ Interesados en este vehículo">
-              {sugeridos.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-            </optgroup>
-          )}
-          <optgroup label={sugeridos.length ? 'Otros contactos' : 'Contactos'}>
-            {resto.map(l => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </optgroup>
-        </select>
+        <SearchSelect value={form.clienteId} onChange={v => set('clienteId', v)} placeholder="— Seleccionar contacto —" searchPlaceholder="Buscar contacto…"
+          options={[
+            { value: '', label: '— Seleccionar contacto —' },
+            ...sugeridos.map(l => ({ value: l.id, label: l.nombre, sub: '⭐ interesado' })),
+            ...resto.map(l => ({ value: l.id, label: l.nombre, sub: l.tel || undefined })),
+          ]} />
       </Field>
       <div className="form-grid cols-2">
         <Field label="Fecha"><input className="input" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} /></Field>
